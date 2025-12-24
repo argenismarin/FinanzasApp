@@ -9,9 +9,10 @@ import path from 'path';
 import authRoutes from './routes/auth.routes';
 import transactionRoutes from './routes/transaction.routes';
 import categoryRoutes from './routes/category.routes';
-import receiptRoutes from './routes/receipt.routes';
-import checklistRoutes from './routes/checklist.routes';
-import analyticsRoutes from './routes/analytics.routes';
+// Temporarily disabled for deployment
+// import receiptRoutes from './routes/receipt.routes';
+// import checklistRoutes from './routes/checklist.routes';
+// import analyticsRoutes from './routes/analytics.routes';
 
 // Load environment variables
 dotenv.config();
@@ -65,9 +66,10 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/receipts', receiptRoutes);
-app.use('/api/checklist', checklistRoutes);
-app.use('/api/analytics', analyticsRoutes);
+// Temporarily disabled for deployment
+// app.use('/api/receipts', receiptRoutes);
+// app.use('/api/checklist', checklistRoutes);
+// app.use('/api/analytics', analyticsRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

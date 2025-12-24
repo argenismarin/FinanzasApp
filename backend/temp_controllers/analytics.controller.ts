@@ -44,10 +44,11 @@ export const getMonthlyTrend = async (req: AuthRequest, res: Response) => {
                 monthlyData[monthKey] = { income: 0, expense: 0 };
             }
 
+            const amount = typeof t.amount === 'number' ? t.amount : Number(t.amount);
             if (t.type === 'INCOME') {
-                monthlyData[monthKey].income += t.amount;
+                monthlyData[monthKey].income += amount;
             } else {
-                monthlyData[monthKey].expense += t.amount;
+                monthlyData[monthKey].expense += amount;
             }
         });
 
@@ -104,7 +105,7 @@ export const getCategoryBreakdown = async (req: AuthRequest, res: Response) => {
 
         const breakdown = transactions.map((t) => ({
             category: categoryMap.get(t.categoryId),
-            total: t._sum.amount || 0,
+            total: typeof t._sum.amount === 'number' ? t._sum.amount : Number(t._sum.amount || 0),
             count: t._count,
             percentage: 0, // Will calculate below
         }));
@@ -159,7 +160,7 @@ export const getTopCategories = async (req: AuthRequest, res: Response) => {
         const topCategories = transactions
             .map((t) => ({
                 category: categoryMap.get(t.categoryId),
-                total: t._sum.amount || 0,
+                total: typeof t._sum.amount === 'number' ? t._sum.amount : Number(t._sum.amount || 0),
                 count: t._count,
             }))
             .sort((a, b) => b.total - a.total)

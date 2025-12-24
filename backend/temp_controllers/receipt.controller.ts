@@ -40,7 +40,7 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
             data: {
                 userId,
                 imageUrl: `/uploads/${req.file.filename}`,
-                ocrData: receiptData,
+                ocrData: receiptData as any,
                 processedAt: new Date(),
             },
         });

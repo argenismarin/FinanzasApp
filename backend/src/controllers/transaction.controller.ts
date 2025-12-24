@@ -312,14 +312,19 @@ export const getTransactionStats = async (req: AuthRequest, res: Response) => {
 
         const byCategory = transactionsByCategory.map(t => ({
             category: categoryMap.get(t.categoryId),
-            total: t._sum.amount || 0,
+            total: t._sum.amount ? Number(t._sum.amount) : 0,
             count: t._count
         }));
 
+        // Calculate totals
+        const income = incomeTotal._sum.amount ? Number(incomeTotal._sum.amount) : 0;
+        const expense = expenseTotal._sum.amount ? Number(expenseTotal._sum.amount) : 0;
+        const balance = income - expense;
+
         res.json({
-            income: incomeTotal._sum.amount || 0,
-            expense: expenseTotal._sum.amount || 0,
-            balance: (incomeTotal._sum.amount || 0) - (expenseTotal._sum.amount || 0),
+            income,
+            expense,
+            balance,
             byCategory
         });
     } catch (error) {
