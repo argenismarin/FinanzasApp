@@ -32,23 +32,27 @@ class ApiClient {
     }
 
     // Auth
-    async login(email: string) {
+    async login(email: string, password?: string, name?: string) {
         console.log('API_URL:', API_URL);
         console.log('Login URL:', `${API_URL}/auth/login`);
 
         try {
+            const body: any = { email };
+            if (password) body.password = password;
+            if (name) body.name = name;
+
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email }),
+                body: JSON.stringify(body),
             });
 
             console.log('Response status:', response.status);
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Login error:', errorText);
-                throw new Error(`Login failed: ${response.status}`);
+                const errorData = await response.json();
+                console.error('Login error:', errorData);
+                throw new Error(errorData.error || `Login failed: ${response.status}`);
             }
 
             const data = await response.json();
