@@ -4,23 +4,28 @@ import prisma from '../lib/prisma';
 
 export const login = async (req: Request, res: Response) => {
     try {
-        const { email } = req.body;
+        const { email, password, name } = req.body;
 
         if (!email) {
             return res.status(400).json({ error: 'Email is required' });
         }
 
-        // Find or create user
+        // Find user
         let user = await prisma.user.findUnique({
             where: { email }
         });
 
         if (!user) {
-            // Create new user (for development)
+            // Create new user
+            if (!name) {
+                return res.status(400).json({ error: 'Name is required for new users' });
+            }
+
             user = await prisma.user.create({
                 data: {
                     email,
-                    name: email.split('@')[0],
+                    name,
+                    password: password || null,
                     role: 'USER',
                     isActive: true,
                     settings: {
@@ -30,6 +35,11 @@ export const login = async (req: Request, res: Response) => {
                     }
                 }
             });
+        } else {
+            // Existing user - verify password if they have one
+            if (user.password && password !== user.password) {
+                return res.status(401).json({ error: 'Invalid password' });
+            }
         }
 
         if (!user.isActive) {

@@ -6,6 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    const [isSignup, setIsSignup] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const { login } = useAuth();
@@ -17,10 +20,10 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            await login(email);
+            await login(email, password, isSignup ? name : undefined);
             router.push('/dashboard');
-        } catch (err) {
-            setError('Error al iniciar sesión. Por favor intenta de nuevo.');
+        } catch (err: any) {
+            setError(err.message || 'Error al iniciar sesión. Por favor intenta de nuevo.');
         } finally {
             setLoading(false);
         }
@@ -34,11 +37,28 @@ export default function LoginPage() {
                         💰 FinanzasApp
                     </h1>
                     <p className="text-gray-600">
-                        Gestiona tus finanzas personales
+                        {isSignup ? 'Crea tu cuenta' : 'Inicia sesión'}
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {isSignup && (
+                        <div>
+                            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                                Nombre Completo
+                            </label>
+                            <input
+                                id="name"
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                required={isSignup}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                placeholder="Juan Pérez"
+                            />
+                        </div>
+                    )}
+
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                             Correo Electrónico
@@ -54,6 +74,21 @@ export default function LoginPage() {
                         />
                     </div>
 
+                    <div>
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                            Contraseña {!isSignup && '(opcional)'}
+                        </label>
+                        <input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required={isSignup}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                            placeholder="••••••••"
+                        />
+                    </div>
+
                     {error && (
                         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                             {error}
@@ -65,12 +100,24 @@ export default function LoginPage() {
                         disabled={loading}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+                        {loading ? 'Procesando...' : (isSignup ? 'Crear Cuenta' : 'Iniciar Sesión')}
                     </button>
                 </form>
 
-                <p className="text-center text-sm text-gray-500 mt-6">
-                    Ingresa tu email para acceder o crear una cuenta
+                <div className="mt-6 text-center">
+                    <button
+                        onClick={() => {
+                            setIsSignup(!isSignup);
+                            setError('');
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                        {isSignup ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                    </button>
+                </div>
+
+                <p className="text-center text-xs text-gray-500 mt-4">
+                    {isSignup ? 'Al crear una cuenta aceptas nuestros términos y condiciones' : 'Ingresa tu email para acceder'}
                 </p>
             </div>
         </div>
