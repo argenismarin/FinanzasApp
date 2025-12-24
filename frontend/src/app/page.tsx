@@ -1,4 +1,28 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import Link from 'next/link';
+
 export default function HomePage() {
+    const { isAuthenticated, loading } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!loading && isAuthenticated) {
+            router.push('/dashboard');
+        }
+    }, [isAuthenticated, loading, router]);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
     return (
         <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             <div className="container mx-auto px-4 py-16">
@@ -35,11 +59,14 @@ export default function HomePage() {
                         </div>
 
                         <div className="space-y-4">
-                            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                            <Link
+                                href="/login"
+                                className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors text-center"
+                            >
                                 🚀 Comenzar
-                            </button>
+                            </Link>
                             <p className="text-sm text-gray-500">
-                                Versión 1.0.0 - En desarrollo
+                                Versión 1.0.0 - Desplegado en Vercel
                             </p>
                         </div>
                     </div>
