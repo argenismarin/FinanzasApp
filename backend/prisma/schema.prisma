@@ -1,0 +1,175 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String
+  microsoftId   String?  @unique @map("microsoft_id")
+  avatarUrl     String?  @map("avatar_url")
+  role          Role     @default(USER)
+  isActive      Boolean  @default(true) @map("is_active")
+  settings      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  transactions        Transaction[]
+  categories          Category[]
+  checklistItems      ChecklistItem[]
+  receipts            Receipt[]
+  createdTransactions Transaction[] @relation("CreatedBy")
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model Transaction {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  type                TransactionType
+  amount              Decimal  @db.Decimal(12, 2)
+  currency            String   @default("COP") @db.VarChar(3)
+  categoryId          String   @map("category_id")
+  description         String   @db.Text
+  date                DateTime @db.Date
+  receiptUrl          String?  @map("receipt_url")
+  isRecurring         Boolean  @default(false) @map("is_recurring")
+  recurringPattern    Json?    @map("recurring_pattern")
+  metadata            Json?
+  syncedToSharepoint  Boolean  @default(false) @map("synced_to_sharepoint")
+  sharepointRowId     String?  @map("sharepoint_row_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  createdBy           String?  @map("created_by")
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category          Category  @relation(fields: [categoryId], references: [id])
+  creator           User?     @relation("CreatedBy", fields: [createdBy], references: [id])
+  checklistCompletion ChecklistCompletion?
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([date])
+  @@index([type])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model Category {
+  id        String          @id @default(uuid())
+  userId    String?         @map("user_id")
+  name      String
+  type      TransactionType
+  color     String
+  icon      String
+  isDefault Boolean         @default(false) @map("is_default")
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  checklistItems ChecklistItem[]
+
+  @@index([userId])
+  @@map("categories")
+}
+
+model ChecklistItem {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  name       String
+  amount     Decimal  @db.Decimal(12, 2)
+  categoryId String   @map("category_id")
+  dueDay     Int      @map("due_day")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category              @relation(fields: [categoryId], references: [id])
+  completions ChecklistCompletion[]
+
+  @@index([userId])
+  @@map("monthly_checklist")
+}
+
+model ChecklistCompletion {
+  id              String    @id @default(uuid())
+  checklistItemId String    @map("checklist_item_id")
+  transactionId   String?   @unique @map("transaction_id")
+  month           DateTime  @db.Date
+  isCompleted     Boolean   @default(false) @map("is_completed")
+  completedAt     DateTime? @map("completed_at")
+
+  checklistItem ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  transaction   Transaction?  @relation(fields: [transactionId], references: [id])
+
+  @@index([checklistItemId])
+  @@index([month])
+  @@map("checklist_completions")
+}
+
+model Receipt {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  transactionId    String?  @map("transaction_id")
+  imageUrl         String   @map("image_url")
+  ocrData          Json?    @map("ocr_data")
+  extractedAmount  Decimal? @db.Decimal(12, 2) @map("extracted_amount")
+  extractedDate    DateTime? @db.Date @map("extracted_date")
+  extractedMerchant String? @map("extracted_merchant")
+  confidenceScore  Float?   @map("confidence_score")
+  status           ReceiptStatus @default(PENDING)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("receipts")
+}
+
+enum ReceiptStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model SharepointSyncLog {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  syncType        SyncType @map("sync_type")
+  status          SyncStatus
+  recordsAffected Int      @map("records_affected")
+  errorMessage    String?  @db.Text @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("sharepoint_sync_log")
+}
+
+enum SyncType {
+  PUSH
+  PULL
+}
+
+enum SyncStatus {
+  SUCCESS
+  ERROR
+}

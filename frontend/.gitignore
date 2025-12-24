@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env.production.local
+.env.development.local
+*.log
+.DS_Store
+.vscode/
+.idea/
+public/sw.js
+public/workbox-*.js
