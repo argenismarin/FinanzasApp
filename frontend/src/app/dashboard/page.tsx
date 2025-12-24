@@ -138,46 +138,46 @@ export default function DashboardPage() {
                     </Link>
 
                     <Link
-                        href="/receipts"
+                        href="/budgets"
                         className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
                     >
                         <div className="flex items-center gap-4">
                             <div className="bg-green-100 rounded-full p-4">
-                                <span className="text-3xl">📸</span>
+                                <span className="text-3xl">📊</span>
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-900">Escanear Factura</h3>
-                                <p className="text-sm text-gray-600">OCR con IA</p>
+                                <h3 className="font-semibold text-gray-900">Presupuestos</h3>
+                                <p className="text-sm text-gray-600">Control de gastos</p>
                             </div>
                         </div>
                     </Link>
 
                     <Link
-                        href="/checklist"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-yellow-100 rounded-full p-4">
-                                <span className="text-3xl">✅</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Checklist Mensual</h3>
-                                <p className="text-sm text-gray-600">Gastos recurrentes</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/analytics"
+                        href="/goals"
                         className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
                     >
                         <div className="flex items-center gap-4">
                             <div className="bg-purple-100 rounded-full p-4">
-                                <span className="text-3xl">📊</span>
+                                <span className="text-3xl">🎯</span>
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-900">Analítica</h3>
-                                <p className="text-sm text-gray-600">Gráficos y reportes</p>
+                                <h3 className="font-semibold text-gray-900">Metas de Ahorro</h3>
+                                <p className="text-sm text-gray-600">Alcanza tus objetivos</p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    <Link
+                        href="/reminders"
+                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-yellow-100 rounded-full p-4">
+                                <span className="text-3xl">🔔</span>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Recordatorios</h3>
+                                <p className="text-sm text-gray-600">Pagos pendientes</p>
                             </div>
                         </div>
                     </Link>
