@@ -9,6 +9,10 @@ import path from 'path';
 import authRoutes from './routes/auth.routes';
 import transactionRoutes from './routes/transaction.routes';
 import categoryRoutes from './routes/category.routes';
+import budgetRoutes from './routes/budget.routes';
+import goalRoutes from './routes/goal.routes';
+import reminderRoutes from './routes/reminder.routes';
+import accountRoutes from './routes/account.routes';
 // Temporarily disabled for deployment
 // import receiptRoutes from './routes/receipt.routes';
 // import checklistRoutes from './routes/checklist.routes';
@@ -66,6 +70,10 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/budgets', budgetRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/reminders', reminderRoutes);
+app.use('/api/accounts', accountRoutes);
 // Temporarily disabled for deployment
 // app.use('/api/receipts', receiptRoutes);
 // app.use('/api/checklist', checklistRoutes);

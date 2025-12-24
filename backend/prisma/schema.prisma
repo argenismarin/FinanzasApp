@@ -14,11 +14,14 @@ model User {
   id            String   @id @default(uuid())
   email         String   @unique
   name          String
+  password      String?
   microsoftId   String?  @unique @map("microsoft_id")
   avatarUrl     String?  @map("avatar_url")
   role          Role     @default(USER)
   isActive      Boolean  @default(true) @map("is_active")
   settings      Json?
+  theme         String   @default("light")
+  defaultCurrency String @default("COP") @map("default_currency")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -27,6 +30,10 @@ model User {
   checklistItems      ChecklistItem[]
   receipts            Receipt[]
   createdTransactions Transaction[] @relation("CreatedBy")
+  budgets             Budget[]
+  savingsGoals        SavingsGoal[]
+  paymentReminders    PaymentReminder[]
+  bankAccounts        BankAccount[]
 
   @@map("users")
 }
@@ -39,12 +46,14 @@ enum Role {
 model Transaction {
   id                  String   @id @default(uuid())
   userId              String   @map("user_id")
+  accountId           String?  @map("account_id")
   type                TransactionType
   amount              Decimal  @db.Decimal(12, 2)
   currency            String   @default("COP") @db.VarChar(3)
   categoryId          String   @map("category_id")
   description         String   @db.Text
   date                DateTime @db.Date
+  tags                Json?
   receiptUrl          String?  @map("receipt_url")
   isRecurring         Boolean  @default(false) @map("is_recurring")
   recurringPattern    Json?    @map("recurring_pattern")
@@ -56,11 +65,13 @@ model Transaction {
   createdBy           String?  @map("created_by")
 
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account           BankAccount? @relation(fields: [accountId], references: [id])
   category          Category  @relation(fields: [categoryId], references: [id])
   creator           User?     @relation("CreatedBy", fields: [createdBy], references: [id])
   checklistCompletion ChecklistCompletion?
 
   @@index([userId])
+  @@index([accountId])
   @@index([categoryId])
   @@index([date])
   @@index([type])
@@ -85,9 +96,87 @@ model Category {
   user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   checklistItems ChecklistItem[]
+  budgets      Budget[]
+  paymentReminders PaymentReminder[]
 
   @@index([userId])
   @@map("categories")
+}
+
+model Budget {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  categoryId String   @map("category_id")
+  amount     Decimal  @db.Decimal(12, 2)
+  period     String   @default("MONTHLY")
+  startDate  DateTime @db.Date @map("start_date")
+  endDate    DateTime? @db.Date @map("end_date")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@index([userId])
+  @@index([categoryId])
+  @@map("budgets")
+}
+
+model SavingsGoal {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  name          String
+  targetAmount  Decimal  @db.Decimal(12, 2) @map("target_amount")
+  currentAmount Decimal  @db.Decimal(12, 2) @default(0) @map("current_amount")
+  deadline      DateTime? @db.Date
+  isCompleted   Boolean  @default(false) @map("is_completed")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("savings_goals")
+}
+
+model PaymentReminder {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  amount      Decimal  @db.Decimal(12, 2)
+  categoryId  String   @map("category_id")
+  dueDay      Int      @map("due_day")
+  isRecurring Boolean  @default(true) @map("is_recurring")
+  isPaid      Boolean  @default(false) @map("is_paid")
+  lastPaidDate DateTime? @db.Date @map("last_paid_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  @@index([userId])
+  @@index([categoryId])
+  @@map("payment_reminders")
+}
+
+model BankAccount {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  type        String
+  balance     Decimal  @db.Decimal(12, 2) @default(0)
+  currency    String   @default("COP") @db.VarChar(3)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@map("bank_accounts")
 }
 
 model ChecklistItem {
