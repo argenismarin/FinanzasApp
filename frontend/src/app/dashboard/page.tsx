@@ -181,6 +181,51 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </Link>
+
+                    <Link
+                        href="/receipts"
+                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-indigo-100 rounded-full p-4">
+                                <span className="text-3xl">📸</span>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Escanear Factura</h3>
+                                <p className="text-sm text-gray-600">OCR con IA</p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    <Link
+                        href="/checklist"
+                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-pink-100 rounded-full p-4">
+                                <span className="text-3xl">✅</span>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Checklist Mensual</h3>
+                                <p className="text-sm text-gray-600">Gastos recurrentes</p>
+                            </div>
+                        </div>
+                    </Link>
+
+                    <Link
+                        href="/analytics"
+                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-cyan-100 rounded-full p-4">
+                                <span className="text-3xl">📈</span>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Analítica</h3>
+                                <p className="text-sm text-gray-600">Gráficos y reportes</p>
+                            </div>
+                        </div>
+                    </Link>
                 </div>
             </main>
         </div>
