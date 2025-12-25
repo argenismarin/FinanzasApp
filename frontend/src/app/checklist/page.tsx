@@ -31,10 +31,10 @@ export default function ChecklistPage() {
     }, [authLoading, isAuthenticated, router]);
 
     const { data: checklistData, isLoading, refetch } = useQuery({
-        queryKey: ['checklist'],
+        queryKey: ['checklist', selectedMonth, selectedYear],
         queryFn: async () => {
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/checklist`,
+                `${process.env.NEXT_PUBLIC_API_URL}/checklist?month=${selectedMonth}&year=${selectedYear}`,
                 {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -56,7 +56,7 @@ export default function ChecklistPage() {
     const toggleMutation = useMutation({
         mutationFn: async (itemId: string) => {
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}/toggle`,
+                `${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}/toggle?month=${selectedMonth}&year=${selectedYear}`,
                 {
                     method: 'PATCH',
                     headers: {

@@ -11,34 +11,50 @@ interface AuthRequest extends Request {
     };
 }
 
-// Get checklist items with current month completions
+// Get checklist items with completion status for specific month
 export const getChecklistItems = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
+        const { month, year } = req.query;
 
-        // Get current month (first day of month)
+        // Parse month and year, default to current month
         const now = new Date();
-        const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const selectedMonth = month ? parseInt(month as string) : now.getMonth() + 1;
+        const selectedYear = year ? parseInt(year as string) : now.getFullYear();
+
+        // Create date for first day of selected month
+        const monthDate = new Date(selectedYear, selectedMonth - 1, 1);
 
         const items = await prisma.checklistItem.findMany({
             where: { userId, isActive: true },
             include: {
                 category: true,
                 completions: {
-                    where: { month: currentMonth },
+                    where: { month: monthDate },
                     include: { transaction: true }
                 }
             },
             orderBy: { dueDay: 'asc' }
         });
 
-        // Transform to include isCompleted flag
-        const itemsWithCompletion = items.map(item => ({
-            ...item,
-            isCompleted: item.completions.length > 0 && item.completions[0].isCompleted,
-            completedAt: item.completions.length > 0 ? item.completions[0].completedAt : null,
-            transactionId: item.completions.length > 0 ? item.completions[0].transactionId : null
-        }));
+        // Transform to include isCompleted flag for THIS SPECIFIC MONTH
+        const itemsWithCompletion = items.map(item => {
+            const completion = item.completions[0]; // Should only be one per month
+            return {
+                id: item.id,
+                name: item.name,
+                amount: item.amount,
+                categoryId: item.categoryId,
+                category: item.category,
+                dueDay: item.dueDay,
+                isActive: item.isActive,
+                createdAt: item.createdAt,
+                // Month-specific completion data
+                isCompleted: completion ? completion.isCompleted : false,
+                completedAt: completion ? completion.completedAt : null,
+                transactionId: completion ? completion.transactionId : null
+            };
+        });
 
         res.json(itemsWithCompletion);
     } catch (error) {
@@ -47,7 +63,7 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Create checklist item
+// Create checklist item (permanent template)
 export const createChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
         const { name, amount, categoryId, dueDay } = req.body;
@@ -79,11 +95,12 @@ export const createChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Toggle checklist item completion and create transaction
+// Toggle checklist item completion for CURRENT MONTH and create transaction
 export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
         const userId = req.user!.id;
+        const { month, year } = req.query;
 
         const item = await prisma.checklistItem.findFirst({
             where: { id, userId },
@@ -94,15 +111,17 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Checklist item not found' });
         }
 
-        // Get current month (first day of month)
+        // Parse month and year, default to current month
         const now = new Date();
-        const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const selectedMonth = month ? parseInt(month as string) : now.getMonth() + 1;
+        const selectedYear = year ? parseInt(year as string) : now.getFullYear();
+        const monthDate = new Date(selectedYear, selectedMonth - 1, 1);
 
-        // Check if there's a completion for this month
+        // Check if there's a completion for THIS SPECIFIC MONTH
         const existingCompletion = await prisma.checklistCompletion.findFirst({
             where: {
                 checklistItemId: id,
-                month: currentMonth
+                month: monthDate
             },
             include: { transaction: true }
         });
@@ -134,7 +153,7 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
                         userId,
                         type: 'EXPENSE',
                         amount: item.amount,
-                        description: `${item.name} (Checklist mensual)`,
+                        description: `${item.name} (Checklist ${selectedMonth}/${selectedYear})`,
                         date: new Date(),
                         categoryId: item.categoryId,
                         currency: 'COP',
@@ -154,13 +173,13 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
                 return res.json({ ...updated, transaction, message: 'Marcado como pagado y transacción creada' });
             }
         } else {
-            // Create new completion and transaction
+            // Create new completion for THIS MONTH and transaction
             const transaction = await prisma.transaction.create({
                 data: {
                     userId,
                     type: 'EXPENSE',
                     amount: item.amount,
-                    description: `${item.name} (Checklist mensual)`,
+                    description: `${item.name} (Checklist ${selectedMonth}/${selectedYear})`,
                     date: new Date(),
                     categoryId: item.categoryId,
                     currency: 'COP',
@@ -171,7 +190,7 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
             const completion = await prisma.checklistCompletion.create({
                 data: {
                     checklistItemId: id,
-                    month: currentMonth,
+                    month: monthDate,
                     isCompleted: true,
                     completedAt: new Date(),
                     transactionId: transaction.id
@@ -186,7 +205,7 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Delete checklist item
+// Delete checklist item (soft delete)
 export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
