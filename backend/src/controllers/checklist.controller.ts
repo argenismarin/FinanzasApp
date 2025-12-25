@@ -24,15 +24,22 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
 
         // Create date for first day of selected month
         const monthDate = new Date(selectedYear, selectedMonth - 1, 1);
+        const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0, 23, 59, 59);
 
         const items = await prisma.checklistItem.findMany({
             where: {
                 userId,
-                isActive: true,
-                // Only show items created on or before the selected month
+                // Show items created on or before the selected month
                 createdAt: {
-                    lte: new Date(selectedYear, selectedMonth, 0, 23, 59, 59) // Last day of selected month
-                }
+                    lte: lastDayOfMonth
+                },
+                // AND either:
+                // 1. Not deleted (deletedAt is null)
+                // 2. OR deleted AFTER the selected month (so it still shows in past months)
+                OR: [
+                    { deletedAt: null },
+                    { deletedAt: { gt: lastDayOfMonth } }
+                ]
             },
             include: {
                 category: true,
@@ -226,10 +233,14 @@ export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Checklist item not found' });
         }
 
-        // Soft delete - mark as inactive
+        // Soft delete - set deletedAt to current timestamp
+        // This preserves the item in historical months but removes it from current/future months
         await prisma.checklistItem.update({
             where: { id },
-            data: { isActive: false }
+            data: {
+                deletedAt: new Date(),
+                isActive: false
+            }
         });
 
         res.json({ message: 'Checklist item deleted successfully' });
