@@ -24,23 +24,26 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
 
         // Create date for first day of selected month
         const monthDate = new Date(selectedYear, selectedMonth - 1, 1);
-        const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0, 23, 59, 59);
+        const firstDayOfMonth = new Date(selectedYear, selectedMonth - 1, 1);
 
         // Build the where clause
         const whereClause: any = {
             userId,
-            // Show items created on or before the selected month
+            // Show items created BEFORE or DURING the selected month
+            // (createdAt must be <= last day of selected month)
             createdAt: {
-                lte: lastDayOfMonth
+                lte: new Date(selectedYear, selectedMonth, 0, 23, 59, 59)
             }
         };
 
         // Add condition for deletedAt:
-        // Show item if it's NOT deleted OR if it was deleted AFTER the selected month
-        // This means: show in all months from creation until deletion
+        // Show item if:
+        // 1. It's NOT deleted (deletedAt is null)
+        // 2. OR it was deleted AFTER the first day of selected month
+        // This means: item appears from creation month until (and including) deletion month
         whereClause.OR = [
-            { deletedAt: null },                    // Not deleted at all
-            { deletedAt: { gt: lastDayOfMonth } }   // Deleted after this month
+            { deletedAt: null },                        // Not deleted at all
+            { deletedAt: { gte: firstDayOfMonth } }     // Deleted during or after this month
         ];
 
         const items = await prisma.checklistItem.findMany({
