@@ -34,13 +34,14 @@ export default function ChecklistPage() {
         queryKey: ['checklist', selectedMonth, selectedYear],
         queryFn: async () => {
             const response = await fetch(
-                `http://localhost:3001/api/checklist?month=${selectedMonth}&year=${selectedYear}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/checklist?month=${selectedMonth}&year=${selectedYear}`,
                 {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
                     },
                 }
             );
+            if (!response.ok) throw new Error('Failed to fetch checklist');
             return response.json();
         },
         enabled: isAuthenticated,
@@ -55,19 +56,16 @@ export default function ChecklistPage() {
     const toggleMutation = useMutation({
         mutationFn: async (itemId: string) => {
             const response = await fetch(
-                `http://localhost:3001/api/checklist/${itemId}/toggle`,
+                `${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}/toggle`,
                 {
-                    method: 'POST',
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
                     },
-                    body: JSON.stringify({
-                        month: selectedMonth,
-                        year: selectedYear,
-                    }),
                 }
             );
+            if (!response.ok) throw new Error('Failed to toggle item');
             return response.json();
         },
         onSuccess: () => {
@@ -77,7 +75,7 @@ export default function ChecklistPage() {
 
     const createMutation = useMutation({
         mutationFn: async (data: any) => {
-            const response = await fetch('http://localhost:3001/api/checklist', {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/checklist`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -85,12 +83,20 @@ export default function ChecklistPage() {
                 },
                 body: JSON.stringify(data),
             });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to create item');
+            }
             return response.json();
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['checklist'] });
             setShowAddForm(false);
             setNewItem({ name: '', amount: '', dueDay: '1', categoryId: '' });
+            alert('✅ Item guardado exitosamente!');
+        },
+        onError: (error: any) => {
+            alert(`❌ Error: ${error.message}`);
         },
     });
 
@@ -249,10 +255,10 @@ export default function ChecklistPage() {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={handleCreateItem}
-                                        disabled={!newItem.name || !newItem.amount}
-                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg disabled:opacity-50"
+                                        disabled={!newItem.name || !newItem.amount || !newItem.categoryId || createMutation.isPending}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Guardar
+                                        {createMutation.isPending ? 'Guardando...' : 'Guardar'}
                                     </button>
                                     <button
                                         onClick={() => setShowAddForm(false)}
@@ -281,8 +287,8 @@ export default function ChecklistPage() {
                                         <div
                                             key={item.id}
                                             className={`flex items-center gap-4 p-4 rounded-lg border-2 transition ${item.isCompleted
-                                                    ? 'border-green-200 bg-green-50'
-                                                    : 'border-gray-200 hover:border-gray-300'
+                                                ? 'border-green-200 bg-green-50'
+                                                : 'border-gray-200 hover:border-gray-300'
                                                 }`}
                                         >
                                             <input
