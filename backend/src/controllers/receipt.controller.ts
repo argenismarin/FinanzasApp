@@ -21,7 +21,8 @@ interface AuthRequest extends Request {
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const dir = 'uploads/receipts/';
+        // In Vercel/serverless, use /tmp directory which is writable
+        const dir = process.env.VERCEL ? '/tmp/receipts' : 'uploads/receipts';
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }

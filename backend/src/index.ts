@@ -21,13 +21,6 @@ import analyticsRoutes from './routes/analytics.routes';
 // Load environment variables
 dotenv.config();
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads/receipts');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log('✅ Created uploads directory');
-}
-
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
