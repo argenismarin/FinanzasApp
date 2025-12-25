@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
-import fs from 'fs';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -40,12 +39,16 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Health check
+// Health check endpoints
 app.get('/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API Routes
+app.get('/api/health', (req: Request, res: Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// API Info
 app.get('/api', (req: Request, res: Response) => {
     res.json({
         message: 'FinanzasApp API',
@@ -55,25 +58,21 @@ app.get('/api', (req: Request, res: Response) => {
             auth: '/api/auth/*',
             transactions: '/api/transactions/*',
             categories: '/api/categories/*',
-            checklist: '/api/checklist/*',
+            budgets: '/api/budgets/*',
+            goals: '/api/goals/*',
+            reminders: '/api/reminders/*',
+            accounts: '/api/accounts/*',
             receipts: '/api/receipts/*',
-            sync: '/api/sync/*',
+            checklist: '/api/checklist/*',
             analytics: '/api/analytics/*'
         }
     });
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-app.get('/api/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// Serve uploaded files (only works locally, not in Vercel)
+if (!process.env.VERCEL) {
+    app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+}
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -101,14 +100,16 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📝 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🔗 API: http://localhost:${PORT}/api`);
-    console.log(`💾 Database: Connected`);
-    console.log(`✅ Routes: Auth, Transactions, Categories, Receipts, Checklist, Analytics`);
-    console.log(`📸 OCR: OpenAI Vision API enabled`);
-});
+// Start server (only when not in Vercel)
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+        console.log(`📝 Environment: ${process.env.NODE_ENV}`);
+        console.log(`🔗 API: http://localhost:${PORT}/api`);
+        console.log(`💾 Database: Connected`);
+        console.log(`✅ Routes: Auth, Transactions, Categories, Budgets, Goals, Reminders, Accounts, Receipts, Checklist, Analytics`);
+        console.log(`📸 OCR: OpenAI Vision API enabled`);
+    });
+}
 
 export default app;
