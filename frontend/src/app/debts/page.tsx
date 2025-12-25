@@ -133,20 +133,30 @@ export default function DebtsPage() {
 
     const debts = Array.isArray(debtsData) ? debtsData : [];
 
-    // Group all debts by creditor (same name = same creditor)
-    // Negative amounts are abonos that subtract from the total
+    // Group by creditor and separate debts from abonos
     const groupedDebts = debts.reduce((acc: any, debt: any) => {
         const creditor = debt.creditor;
         if (!acc[creditor]) {
             acc[creditor] = {
                 creditor,
                 debts: [],
-                totalPending: 0
+                abonos: [],
+                totalDebt: 0,
+                totalAbonos: 0,
+                netPending: 0
             };
         }
-        acc[creditor].debts.push(debt);
-        // Sum all pending amounts (negatives subtract automatically)
-        acc[creditor].totalPending += debt.pendingAmount;
+
+        // Separate by positive (debts) vs negative (abonos)
+        if (debt.pendingAmount >= 0) {
+            acc[creditor].debts.push(debt);
+            acc[creditor].totalDebt += debt.pendingAmount;
+        } else {
+            acc[creditor].abonos.push(debt);
+            acc[creditor].totalAbonos += Math.abs(debt.pendingAmount);
+        }
+
+        acc[creditor].netPending += debt.pendingAmount;
         return acc;
     }, {});
 
@@ -155,9 +165,9 @@ export default function DebtsPage() {
     // Count unique creditors
     const uniqueCreditors = Object.keys(groupedDebts).length;
 
-    // Total debt across all creditors (sum of all pending amounts)
+    // Total debt (net after abonos)
     const totalDebt = creditorGroups.reduce((sum: number, group: any) => {
-        return sum + group.totalPending;
+        return sum + group.netPending;
     }, 0);
 
     if (authLoading || isLoading) {
@@ -316,12 +326,13 @@ export default function DebtsPage() {
                                             <h3 className="font-bold text-xl text-gray-900">{group.creditor}</h3>
                                             <p className="text-sm text-gray-600">
                                                 {group.debts.length} deuda{group.debts.length > 1 ? 's' : ''}
+                                                {group.abonos.length > 0 && ` • ${group.abonos.length} abono${group.abonos.length > 1 ? 's' : ''}`}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm text-gray-600">Total Pendiente</p>
-                                            <p className="text-2xl font-bold text-red-600">
-                                                {formatCOP(group.totalPending)}
+                                            <p className="text-sm text-gray-600">Saldo Neto</p>
+                                            <p className={`text-2xl font-bold ${group.netPending >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                {formatCOP(Math.abs(group.netPending))}
                                             </p>
                                         </div>
                                     </div>
