@@ -109,3 +109,84 @@ export const deleteSaving = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+// Withdraw from saving to make it available
+export const withdrawFromSaving = async (req: AuthRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { amount } = req.body;
+        const userId = req.user!.id;
+
+        if (!amount || parseFloat(amount) <= 0) {
+            return res.status(400).json({ error: 'Valid amount is required' });
+        }
+
+        const saving = await prisma.saving.findFirst({
+            where: { id, userId }
+        });
+
+        if (!saving) {
+            return res.status(404).json({ error: 'Saving not found' });
+        }
+
+        const withdrawAmount = parseFloat(amount);
+        const currentAmount = Number(saving.amount);
+
+        if (withdrawAmount > currentAmount) {
+            return res.status(400).json({ error: 'Insufficient funds in saving' });
+        }
+
+        // Get or create a default category for savings withdrawal
+        let savingsCategory = await prisma.category.findFirst({
+            where: {
+                userId,
+                name: 'Retiro de Ahorros'
+            }
+        });
+
+        if (!savingsCategory) {
+            savingsCategory = await prisma.category.create({
+                data: {
+                    userId,
+                    name: 'Retiro de Ahorros',
+                    type: 'INCOME',
+                    color: '#10b981',
+                    icon: '🏦'
+                }
+            });
+        }
+
+        // Create income transaction for withdrawal
+        await prisma.transaction.create({
+            data: {
+                userId,
+                amount: withdrawAmount,
+                type: 'INCOME',
+                categoryId: savingsCategory.id,
+                description: `Retiro de: ${saving.name}`,
+                date: new Date(),
+                createdBy: userId
+            }
+        });
+
+        // Update or delete saving
+        const newAmount = currentAmount - withdrawAmount;
+        if (newAmount === 0) {
+            await prisma.saving.delete({ where: { id } });
+        } else {
+            await prisma.saving.update({
+                where: { id },
+                data: { amount: newAmount }
+            });
+        }
+
+        res.json({
+            message: 'Withdrawal successful',
+            withdrawnAmount: withdrawAmount,
+            remainingAmount: newAmount
+        });
+    } catch (error) {
+        console.error('Withdraw from saving error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};

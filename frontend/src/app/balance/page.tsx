@@ -160,12 +160,8 @@ export default function BalancePage() {
                         </p>
                         <div className="bg-white bg-opacity-20 rounded-lg p-3 text-sm">
                             <p className="mb-1">💰 Banco: {formatCOP(balance.bankBalance)}</p>
-                            <p className="mb-1 border-b border-white border-opacity-30 pb-1">
-                                🏦 - Ahorros: {formatCOP(balance.totalSavings)}
-                            </p>
-                            <p className="font-bold mt-1">= {formatCOP(balance.availableToSpend)}</p>
                             <p className="text-xs mt-2 opacity-80">
-                                (Los ahorros NO están disponibles)
+                                (Dinero disponible en banco/efectivo)
                             </p>
                         </div>
                     </div>

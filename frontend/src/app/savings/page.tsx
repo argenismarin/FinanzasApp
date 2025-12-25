@@ -97,6 +97,32 @@ export default function SavingsPage() {
         },
     });
 
+    const withdrawMutation = useMutation({
+        mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/savings/${id}/withdraw`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: JSON.stringify({ amount }),
+            });
+            if (!response.ok) throw new Error('Failed to withdraw');
+            return response.json();
+        },
+        onSuccess: (data) => {
+            refetch();
+            alert(`💰 Retiro exitoso! Ahora disponible: ${formatCOP(data.withdrawnAmount)}`);
+        },
+    });
+
+    const handleWithdraw = (saving: any) => {
+        const amount = prompt(`Monto a sacar (Disponible: $${parseFloat(saving.amount).toLocaleString('es-CO')})`);
+        if (amount && parseFloat(amount) > 0) {
+            withdrawMutation.mutate({ id: saving.id, amount: parseFloat(amount) });
+        }
+    };
+
     const formatCOP = (amount: number) => {
         return new Intl.NumberFormat('es-CO', {
             style: 'currency',
@@ -290,9 +316,15 @@ export default function SavingsPage() {
                                     {saving.purpose && (
                                         <p className="text-sm text-gray-600 mb-2">{saving.purpose}</p>
                                     )}
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-gray-500 mb-3">
                                         Creado: {new Date(saving.createdAt).toLocaleDateString('es-CO')}
                                     </p>
+                                    <button
+                                        onClick={() => handleWithdraw(saving)}
+                                        className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 rounded-lg text-sm font-semibold"
+                                    >
+                                        💸 Sacar a Disponible
+                                    </button>
                                 </div>
                             ))}
                         </div>

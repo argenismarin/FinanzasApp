@@ -52,7 +52,9 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
 
         // Calculate metrics
         const netWorth = bankBalance + totalSavings - totalDebts;
-        const availableToSpend = bankBalance - totalSavings;
+        // Savings are NOT in the bank, they're physically stored separately
+        // So available to spend is simply what's in the bank
+        const availableToSpend = bankBalance;
 
         res.json({
             bankBalance,
