@@ -100,6 +100,26 @@ export default function ChecklistPage() {
         },
     });
 
+    const deleteMutation = useMutation({
+        mutationFn: async (itemId: string) => {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}`, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+            });
+            if (!response.ok) throw new Error('Failed to delete item');
+            return response.json();
+        },
+        onSuccess: () => {
+            refetch();
+            alert('🗑️ Item eliminado exitosamente!');
+        },
+        onError: (error: any) => {
+            alert(`❌ Error: ${error.message}`);
+        },
+    });
+
     const handleCreateItem = () => {
         createMutation.mutate({
             ...newItem,
@@ -107,6 +127,19 @@ export default function ChecklistPage() {
             dueDay: parseInt(newItem.dueDay),
         });
     };
+
+    const handleDeleteItem = (itemId: string, itemName: string) => {
+        if (confirm(`¿Estás seguro de eliminar "${itemName}"?`)) {
+            deleteMutation.mutate(itemId);
+        }
+    };
+
+    // Refetch when month or year changes
+    useEffect(() => {
+        if (isAuthenticated) {
+            refetch();
+        }
+    }, [selectedMonth, selectedYear, isAuthenticated, refetch]);
 
     if (authLoading || !isAuthenticated) {
         return (
@@ -310,6 +343,13 @@ export default function ChecklistPage() {
                                                     ✓ {new Date(item.completedAt).toLocaleDateString('es-CO')}
                                                 </span>
                                             )}
+                                            <button
+                                                onClick={() => handleDeleteItem(item.id, item.name)}
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition"
+                                                title="Eliminar item"
+                                            >
+                                                🗑️
+                                            </button>
                                         </div>
                                     ))}
                             </div>
