@@ -19,6 +19,9 @@ import analyticsRoutes from './routes/analytics.routes';
 import debtRoutes from './routes/debt.routes';
 import savingRoutes from './routes/saving.routes';
 import balanceRoutes from './routes/balance.routes';
+import notificationRoutes from './routes/notification.routes';
+import exportRoutes from './routes/export.routes';
+import aiRoutes from './routes/ai.routes';
 
 // Load environment variables
 dotenv.config();
@@ -91,6 +94,9 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/debts', debtRoutes);
 app.use('/api/savings', savingRoutes);
 app.use('/api/balance', balanceRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

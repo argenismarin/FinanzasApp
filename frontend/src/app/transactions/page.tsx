@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import ExportMenu from '@/components/ExportMenu';
 
 export default function TransactionsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -81,12 +82,10 @@ export default function TransactionsPage() {
                         ← Dashboard
                     </Link>
                     <div className="flex gap-3">
-                        <button
-                            onClick={exportToExcel}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
-                        >
-                            📥 Exportar Excel
-                        </button>
+                        <ExportMenu 
+                            type="transactions" 
+                            filters={{ type: filter !== 'all' ? filter : undefined }}
+                        />
                         <Link
                             href="/transactions/new"
                             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"

@@ -8,6 +8,15 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
+import {
+    ComparisonWidget,
+    TopCategoriesWidget,
+    BudgetAlertsWidget,
+    UpcomingRemindersWidget,
+    GoalsProgressWidget,
+    TrendWidget
+} from '@/components/DashboardWidgets';
+import NotificationCenter from '@/components/NotificationCenter';
 
 export default function DashboardPage() {
     const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -19,6 +28,25 @@ export default function DashboardPage() {
             router.push('/login');
         }
     }, [authLoading, isAuthenticated, router]);
+
+    // Run notification checks on dashboard load
+    useEffect(() => {
+        if (isAuthenticated) {
+            const runChecks = async () => {
+                try {
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/run-checks`, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem('token')}`,
+                        },
+                    });
+                } catch (error) {
+                    console.error('Failed to run notification checks:', error);
+                }
+            };
+            runChecks();
+        }
+    }, [isAuthenticated]);
 
     const { data: stats, isLoading: statsLoading } = useQuery({
         queryKey: ['transaction-stats'],
@@ -46,6 +74,20 @@ export default function DashboardPage() {
         enabled: isAuthenticated,
     });
 
+    const { data: dashboardStats, isLoading: dashboardLoading } = useQuery({
+        queryKey: ['dashboard-stats'],
+        queryFn: async () => {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/analytics/dashboard`, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+            });
+            if (!response.ok) throw new Error('Failed to fetch dashboard stats');
+            return response.json();
+        },
+        enabled: isAuthenticated,
+    });
+
     if (authLoading || !isAuthenticated) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -64,6 +106,7 @@ export default function DashboardPage() {
                 <div className="container mx-auto px-4 py-4 flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-gray-900">💰 FinanzasApp</h1>
                     <div className="flex items-center gap-4">
+                        <NotificationCenter />
                         <button
                             onClick={toggleTheme}
                             className="p-2 rounded-lg hover:bg-gray-100 transition"
@@ -172,30 +215,61 @@ export default function DashboardPage() {
                     </Link>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <StatCard
-                        title="Ingresos"
-                        amount={stats?.income || 0}
-                        icon="💰"
-                        color="green"
-                        loading={statsLoading}
-                    />
-                    <StatCard
-                        title="Gastos"
-                        amount={stats?.expense || 0}
-                        icon="💸"
-                        color="red"
-                        loading={statsLoading}
-                    />
-                    <StatCard
-                        title="Balance"
-                        amount={stats?.balance || 0}
-                        icon="📊"
-                        color="blue"
-                        loading={statsLoading}
-                    />
-                </div>
+                {/* Comparison Cards - Current vs Previous Month */}
+                {!dashboardLoading && dashboardStats && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <ComparisonWidget
+                            title="Ingresos del Mes"
+                            current={dashboardStats.currentMonth.income}
+                            previous={dashboardStats.previousMonth.income}
+                            icon="💰"
+                            type="income"
+                        />
+                        <ComparisonWidget
+                            title="Gastos del Mes"
+                            current={dashboardStats.currentMonth.expense}
+                            previous={dashboardStats.previousMonth.expense}
+                            icon="💸"
+                            type="expense"
+                        />
+                        <ComparisonWidget
+                            title="Balance del Mes"
+                            current={dashboardStats.currentMonth.balance}
+                            previous={dashboardStats.previousMonth.balance}
+                            icon="📊"
+                            type="balance"
+                        />
+                    </div>
+                )}
+
+                {/* Budget Alerts - Full Width if exists */}
+                {!dashboardLoading && dashboardStats?.budgetAlerts && dashboardStats.budgetAlerts.length > 0 && (
+                    <div className="mb-8">
+                        <BudgetAlertsWidget alerts={dashboardStats.budgetAlerts} />
+                    </div>
+                )}
+
+                {/* Insights Grid */}
+                {!dashboardLoading && dashboardStats && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        {/* Top Categories */}
+                        <TopCategoriesWidget categories={dashboardStats.topCategories} />
+                        
+                        {/* Upcoming Reminders or Goals Progress */}
+                        {dashboardStats.upcomingReminders && dashboardStats.upcomingReminders.length > 0 ? (
+                            <UpcomingRemindersWidget reminders={dashboardStats.upcomingReminders} />
+                        ) : dashboardStats.goalsProgress && dashboardStats.goalsProgress.length > 0 ? (
+                            <GoalsProgressWidget goals={dashboardStats.goalsProgress} />
+                        ) : null}
+                    </div>
+                )}
+
+                {/* 6 Month Trend */}
+                {!dashboardLoading && dashboardStats?.trend && (
+                    <div className="mb-8">
+                        <TrendWidget trend={dashboardStats.trend} />
+                    </div>
+                )}
 
                 {/* Recent Transactions */}
                 <div className="bg-white rounded-2xl shadow-xl p-6">
@@ -350,44 +424,23 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </Link>
+
+                    <Link
+                        href="/calculators"
+                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-purple-100 rounded-full p-4">
+                                <span className="text-3xl">🧮</span>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Calculadoras</h3>
+                                <p className="text-sm text-gray-600">Herramientas financieras</p>
+                            </div>
+                        </div>
+                    </Link>
                 </div>
             </main>
-        </div>
-    );
-}
-
-function StatCard({
-    title,
-    amount,
-    icon,
-    color,
-    loading,
-}: {
-    title: string;
-    amount: number;
-    icon: string;
-    color: 'green' | 'red' | 'blue';
-    loading: boolean;
-}) {
-    const colorClasses = {
-        green: 'bg-green-100 text-green-700',
-        red: 'bg-red-100 text-red-700',
-        blue: 'bg-blue-100 text-blue-700',
-    };
-
-    return (
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-                <span className="text-3xl">{icon}</span>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${colorClasses[color]}`}>
-                    {title}
-                </span>
-            </div>
-            {loading ? (
-                <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
-            ) : (
-                <p className="text-3xl font-bold text-gray-900">{formatCOP(amount)}</p>
-            )}
         </div>
     );
 }

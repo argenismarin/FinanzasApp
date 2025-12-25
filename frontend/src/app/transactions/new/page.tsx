@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import CurrencyInput from '@/components/CurrencyInput';
 
 export default function NewTransactionPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -112,15 +113,11 @@ export default function NewTransactionPage() {
                             <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
                                 Monto (COP)
                             </label>
-                            <input
-                                id="amount"
-                                type="number"
-                                step="1"
+                            <CurrencyInput
                                 value={formData.amount}
-                                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                required
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                                placeholder="50000"
+                                onChange={(value) => setFormData({ ...formData, amount: value })}
+                                placeholder="Ingrese el monto"
+                                autoFocus
                             />
                         </div>
 

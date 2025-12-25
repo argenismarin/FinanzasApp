@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
+import ExportMenu from '@/components/ExportMenu';
 import {
     LineChart,
     Line,
@@ -117,10 +118,17 @@ export default function AnalyticsPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             <header className="bg-white shadow-sm">
-                <div className="container mx-auto px-4 py-4">
+                <div className="container mx-auto px-4 py-4 flex justify-between items-center">
                     <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
                         ← Dashboard
                     </Link>
+                    <ExportMenu 
+                        type="monthly-report"
+                        filters={{ 
+                            year: new Date().getFullYear(), 
+                            month: new Date().getMonth() + 1 
+                        }}
+                    />
                 </div>
             </header>
 

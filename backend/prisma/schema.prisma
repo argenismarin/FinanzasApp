@@ -36,6 +36,7 @@ model User {
   bankAccounts        BankAccount[]
   debts               Debt[]
   savings             Saving[]
+  notifications       Notification[]
 
   @@map("users")
 }
@@ -278,9 +279,25 @@ model Debt {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments DebtPayment[]
 
   @@index([userId])
   @@map("debts")
+}
+
+model DebtPayment {
+  id          String   @id @default(uuid())
+  debtId      String   @map("debt_id")
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+  paymentDate DateTime @default(now()) @map("payment_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  debt Debt @relation(fields: [debtId], references: [id], onDelete: Cascade)
+
+  @@index([debtId])
+  @@index([paymentDate])
+  @@map("debt_payments")
 }
 
 model Saving {
@@ -296,4 +313,42 @@ model Saving {
 
   @@index([userId])
   @@map("savings")
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  userId    String              @map("user_id")
+  type      NotificationType
+  title     String
+  message   String              @db.Text
+  icon      String              @default("🔔")
+  link      String?             // URL opcional para redirigir
+  priority  NotificationPriority @default(NORMAL)
+  isRead    Boolean             @default(false) @map("is_read")
+  readAt    DateTime?           @map("read_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  BUDGET_ALERT
+  PAYMENT_REMINDER
+  GOAL_COMPLETED
+  DEBT_DUE
+  UNUSUAL_SPENDING
+  ACHIEVEMENT
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }

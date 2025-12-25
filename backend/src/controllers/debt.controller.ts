@@ -18,6 +18,11 @@ export const getDebts = async (req: AuthRequest, res: Response) => {
 
         const debts = await prisma.debt.findMany({
             where: { userId },
+            include: {
+                payments: {
+                    orderBy: { paymentDate: 'desc' }
+                }
+            },
             orderBy: { createdAt: 'desc' }
         });
 
@@ -99,7 +104,7 @@ export const updateDebt = async (req: AuthRequest, res: Response) => {
 export const payDebt = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const { amount } = req.body;
+        const { amount, description } = req.body;
         const userId = req.user!.id;
 
         if (!amount || parseFloat(amount) <= 0) {
@@ -148,9 +153,19 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
                 amount: parseFloat(amount),
                 type: 'EXPENSE',
                 categoryId: debtCategory.id,
-                description: `Pago a: ${debt.creditor}`,
+                description: description || `Pago a: ${debt.creditor}`,
                 date: new Date(),
                 createdBy: userId
+            }
+        });
+
+        // Create payment history record
+        await prisma.debtPayment.create({
+            data: {
+                debtId: id,
+                amount: parseFloat(amount),
+                description: description || null,
+                paymentDate: new Date()
             }
         });
 
