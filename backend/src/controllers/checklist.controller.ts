@@ -239,11 +239,12 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Delete checklist item (soft delete with timestamp)
+// Delete checklist item (soft delete with timestamp from selected month)
 export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
         const userId = req.user!.id;
+        const { month, year } = req.query;
 
         const item = await prisma.checklistItem.findFirst({
             where: { id, userId }
@@ -253,18 +254,27 @@ export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Checklist item not found' });
         }
 
-        // Soft delete - set deletedAt to current timestamp
-        // This preserves the item in historical months but removes it from current/future months
+        // Parse month and year, default to current month
+        const now = new Date();
+        const selectedMonth = month ? parseInt(month as string) : now.getMonth() + 1;
+        const selectedYear = year ? parseInt(year as string) : now.getFullYear();
+
+        // Set deletedAt to the first day of the selected month
+        const deletionDate = new Date(selectedYear, selectedMonth - 1, 1);
+
         await prisma.checklistItem.update({
             where: { id },
             data: {
-                deletedAt: new Date(),
+                deletedAt: deletionDate,
                 isActive: false
             }
         });
 
-        console.log(`Item ${item.name} deleted at ${new Date().toISOString()}`);
-        res.json({ message: 'Checklist item deleted successfully' });
+        console.log(`Item ${item.name} deleted from ${selectedMonth}/${selectedYear} onwards`);
+        res.json({
+            message: 'Checklist item deleted successfully',
+            deletedFrom: `${selectedMonth}/${selectedYear}`
+        });
     } catch (error) {
         console.error('Delete checklist item error:', error);
         res.status(500).json({ error: 'Internal server error' });

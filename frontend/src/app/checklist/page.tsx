@@ -102,18 +102,21 @@ export default function ChecklistPage() {
 
     const deleteMutation = useMutation({
         mutationFn: async (itemId: string) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}?month=${selectedMonth}&year=${selectedYear}`,
+                {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    },
+                }
+            );
             if (!response.ok) throw new Error('Failed to delete item');
             return response.json();
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             refetch();
-            alert('🗑️ Item eliminado exitosamente!');
+            alert(`🗑️ Item eliminado desde ${data.deletedFrom} en adelante!`);
         },
         onError: (error: any) => {
             alert(`❌ Error: ${error.message}`);
