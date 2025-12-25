@@ -17,6 +17,7 @@ export default function ChecklistPage() {
     const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
     const [showAddForm, setShowAddForm] = useState(false);
+    const [editingItem, setEditingItem] = useState<any>(null);
     const [newItem, setNewItem] = useState({
         name: '',
         amount: '',
@@ -131,6 +132,43 @@ export default function ChecklistPage() {
             month: selectedMonth,
             year: selectedYear,
         });
+    };
+
+    const updateMutation = useMutation({
+        mutationFn: async ({ id, data }: { id: string; data: any }) => {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/checklist/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: JSON.stringify(data),
+            });
+            if (!response.ok) throw new Error('Failed to update item');
+            return response.json();
+        },
+        onSuccess: () => {
+            refetch();
+            setEditingItem(null);
+            alert('✏️ Item actualizado exitosamente!');
+        },
+        onError: (error: any) => {
+            alert(`❌ Error: ${error.message}`);
+        },
+    });
+
+    const handleUpdateItem = () => {
+        if (editingItem) {
+            updateMutation.mutate({
+                id: editingItem.id,
+                data: {
+                    name: editingItem.name,
+                    amount: parseFloat(editingItem.amount),
+                    categoryId: editingItem.categoryId,
+                    dueDay: parseInt(editingItem.dueDay),
+                }
+            });
+        }
     };
 
     const handleDeleteItem = (itemId: string, itemName: string) => {
@@ -309,6 +347,67 @@ export default function ChecklistPage() {
                         </div>
                     )}
 
+                    {/* Edit Form Modal */}
+                    {editingItem && (
+                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">✏️ Editar Item</h3>
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Nombre"
+                                    value={editingItem.name}
+                                    onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                                <input
+                                    type="number"
+                                    placeholder="Monto"
+                                    value={editingItem.amount}
+                                    onChange={(e) => setEditingItem({ ...editingItem, amount: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="31"
+                                        placeholder="Día (1-31)"
+                                        value={editingItem.dueDay}
+                                        onChange={(e) => setEditingItem({ ...editingItem, dueDay: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    />
+                                    <select
+                                        value={editingItem.categoryId}
+                                        onChange={(e) => setEditingItem({ ...editingItem, categoryId: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    >
+                                        <option value="">Categoría</option>
+                                        {categories?.map((cat: any) => (
+                                            <option key={cat.id} value={cat.id}>
+                                                {cat.icon} {cat.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleUpdateItem}
+                                        disabled={!editingItem.name || !editingItem.amount || !editingItem.categoryId || updateMutation.isPending}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {updateMutation.isPending ? 'Actualizando...' : 'Actualizar'}
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingItem(null)}
+                                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Checklist Items */}
                     <div className="bg-white rounded-2xl shadow-xl p-6">
                         <h2 className="text-xl font-bold text-gray-900 mb-4">Items del Mes</h2>
@@ -348,6 +447,19 @@ export default function ChecklistPage() {
                                                     ✓ {new Date(item.completedAt).toLocaleDateString('es-CO')}
                                                 </span>
                                             )}
+                                            <button
+                                                onClick={() => setEditingItem({
+                                                    id: item.id,
+                                                    name: item.name,
+                                                    amount: item.amount.toString(),
+                                                    categoryId: item.categoryId,
+                                                    dueDay: item.dueDay.toString()
+                                                })}
+                                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition"
+                                                title="Editar item"
+                                            >
+                                                ✏️
+                                            </button>
                                             <button
                                                 onClick={() => handleDeleteItem(item.id, item.name)}
                                                 className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition"

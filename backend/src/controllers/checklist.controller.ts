@@ -248,6 +248,40 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// Update checklist item
+export const updateChecklistItem = async (req: AuthRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, amount, categoryId, dueDay } = req.body;
+        const userId = req.user!.id;
+
+        const item = await prisma.checklistItem.findFirst({
+            where: { id, userId }
+        });
+
+        if (!item) {
+            return res.status(404).json({ error: 'Checklist item not found' });
+        }
+
+        const updated = await prisma.checklistItem.update({
+            where: { id },
+            data: {
+                name: name || item.name,
+                amount: amount ? parseFloat(amount) : item.amount,
+                categoryId: categoryId || item.categoryId,
+                dueDay: dueDay ? parseInt(dueDay) : item.dueDay
+            },
+            include: { category: true, completions: true }
+        });
+
+        console.log(`Item ${item.name} updated`);
+        res.json(updated);
+    } catch (error) {
+        console.error('Update checklist item error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // Delete checklist item (soft delete with timestamp from selected month)
 export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
