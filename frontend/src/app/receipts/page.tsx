@@ -1,27 +1,86 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function ReceiptsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
-    const queryClient = useQueryClient();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [processing, setProcessing] = useState(false);
     const [ocrData, setOcrData] = useState<any>(null);
+    const [receiptId, setReceiptId] = useState<string | null>(null);
+    const [showCamera, setShowCamera] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
             router.push('/login');
         }
     }, [authLoading, isAuthenticated, router]);
+
+    useEffect(() => {
+        return () => {
+            // Cleanup camera stream on unmount
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, []);
+
+    const startCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' } // Use back camera on mobile
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                streamRef.current = stream;
+                setShowCamera(true);
+            }
+        } catch (error) {
+            console.error('Error accessing camera:', error);
+            alert('No se pudo acceder a la cámara. Por favor verifica los permisos.');
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        setShowCamera(false);
+    };
+
+    const capturePhoto = () => {
+        if (videoRef.current && canvasRef.current) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(video, 0, 0);
+
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                        setSelectedFile(file);
+                        setPreview(canvas.toDataURL('image/jpeg'));
+                        stopCamera();
+                    }
+                }, 'image/jpeg', 0.95);
+            }
+        }
+    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -35,15 +94,18 @@ export default function ReceiptsPage() {
         }
     };
 
-    const handleUpload = async () => {
+    const handleUploadAndProcess = async () => {
         if (!selectedFile) return;
 
         setUploading(true);
+        setOcrData(null);
+
         try {
+            // Step 1: Upload receipt
             const formData = new FormData();
             formData.append('receipt', selectedFile);
 
-            const response = await fetch('http://localhost:3001/api/receipts/upload', {
+            const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/receipts/upload`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -51,23 +113,47 @@ export default function ReceiptsPage() {
                 body: formData,
             });
 
-            if (!response.ok) throw new Error('Upload failed');
+            if (!uploadResponse.ok) {
+                const errorData = await uploadResponse.json();
+                throw new Error(errorData.error || 'Error al subir la factura');
+            }
 
-            const data = await response.json();
-            setOcrData(data.extractedData);
-            alert('¡Factura procesada con éxito!');
-        } catch (error) {
-            alert('Error al procesar la factura');
+            const uploadData = await uploadResponse.json();
+            setReceiptId(uploadData.id);
+
+            // Step 2: Process with OCR
+            setProcessing(true);
+            const processResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/receipts/${uploadData.id}/process`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!processResponse.ok) {
+                const errorData = await processResponse.json();
+                throw new Error(errorData.details || errorData.error || 'Error al procesar con OCR');
+            }
+
+            const processData = await processResponse.json();
+            setOcrData(processData.ocrData);
+            alert('¡Factura procesada con éxito! ✅');
+
+        } catch (error: any) {
+            console.error('Error:', error);
+            alert(`Error: ${error.message}`);
         } finally {
             setUploading(false);
+            setProcessing(false);
         }
     };
 
     if (authLoading || !isAuthenticated) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                < div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" ></div >
-            </div >
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
         );
     }
 
@@ -88,44 +174,90 @@ export default function ReceiptsPage() {
                     </h1>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Upload Section */}
+                        {/* Upload/Camera Section */}
                         <div className="bg-white rounded-2xl shadow-xl p-6">
                             <h2 className="text-xl font-bold text-gray-900 mb-4">
-                                Subir Factura
+                                Capturar Factura
                             </h2>
 
                             <div className="space-y-4">
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                                    {preview ? (
-                                        <img
-                                            src={preview}
-                                            alt="Preview"
-                                            className="max-h-64 mx-auto rounded-lg"
-                                        />
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center min-h-[300px] flex items-center justify-center">
+                                    {showCamera ? (
+                                        <div className="w-full">
+                                            <video
+                                                ref={videoRef}
+                                                autoPlay
+                                                playsInline
+                                                className="w-full rounded-lg"
+                                            />
+                                            <div className="mt-4 flex gap-2">
+                                                <button
+                                                    onClick={capturePhoto}
+                                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                                >
+                                                    📷 Capturar
+                                                </button>
+                                                <button
+                                                    onClick={stopCamera}
+                                                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                                >
+                                                    ❌ Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : preview ? (
+                                        <div className="w-full">
+                                            <img
+                                                src={preview}
+                                                alt="Preview"
+                                                className="max-h-64 mx-auto rounded-lg"
+                                            />
+                                            <button
+                                                onClick={() => { setPreview(null); setSelectedFile(null); setOcrData(null); }}
+                                                className="mt-4 text-red-600 hover:text-red-700 text-sm"
+                                            >
+                                                🗑️ Eliminar
+                                            </button>
+                                        </div>
                                     ) : (
                                         <div>
                                             <div className="text-6xl mb-4">📄</div>
                                             <p className="text-gray-600">
-                                                Selecciona una imagen de tu factura
+                                                Toma una foto o sube una imagen
                                             </p>
                                         </div>
                                     )}
                                 </div>
 
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleFileSelect}
-                                    className="w-full"
-                                />
+                                {!showCamera && !preview && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={startCamera}
+                                            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                                        >
+                                            📷 Abrir Cámara
+                                        </button>
+                                        <label className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors cursor-pointer text-center">
+                                            📁 Subir Archivo
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileSelect}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                    </div>
+                                )}
 
-                                <button
-                                    onClick={handleUpload}
-                                    disabled={!selectedFile || uploading}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {uploading ? 'Procesando...' : '🔍 Analizar con IA'}
-                                </button>
+                                {preview && !showCamera && (
+                                    <button
+                                        onClick={handleUploadAndProcess}
+                                        disabled={!selectedFile || uploading || processing}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {uploading ? '📤 Subiendo...' : processing ? '🤖 Procesando con IA...' : '🔍 Analizar con OpenAI'}
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -142,7 +274,7 @@ export default function ReceiptsPage() {
                                             Monto
                                         </label>
                                         <p className="text-2xl font-bold text-green-600">
-                                            {formatCOP(ocrData.amount || 0)}
+                                            ${ocrData.amount || 0} {ocrData.currency || 'COP'}
                                         </p>
                                     </div>
 
@@ -172,16 +304,18 @@ export default function ReceiptsPage() {
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                 Items
                                             </label>
-                                            <ul className="list-disc list-inside text-sm text-gray-600">
-                                                {ocrData.items.map((item: string, i: number) => (
-                                                    <li key={i}>{item}</li>
+                                            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                                                {ocrData.items.map((item: any, i: number) => (
+                                                    <li key={i}>
+                                                        {item.description} x{item.quantity} - ${item.price}
+                                                    </li>
                                                 ))}
                                             </ul>
                                         </div>
                                     )}
 
                                     <Link
-                                        href="/transactions/new"
+                                        href={`/transactions/new?amount=${ocrData.amount}&description=${ocrData.merchant || ''}&date=${ocrData.date || ''}`}
                                         className="block w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors text-center"
                                     >
                                         ✅ Crear Transacción
@@ -203,14 +337,17 @@ export default function ReceiptsPage() {
                             💡 Cómo funciona
                         </h3>
                         <ul className="text-sm text-blue-800 space-y-1">
-                            <li>1. Toma una foto clara de tu factura</li>
-                            <li>2. Sube la imagen y espera el análisis</li>
-                            <li>3. Revisa los datos extraídos automáticamente</li>
+                            <li>1. Toma una foto con la cámara o sube una imagen guardada</li>
+                            <li>2. La IA de OpenAI analizará la factura automáticamente</li>
+                            <li>3. Revisa los datos extraídos (monto, fecha, comercio, items)</li>
                             <li>4. Crea la transacción con un click</li>
                         </ul>
                     </div>
                 </div>
             </main>
+
+            {/* Hidden canvas for photo capture */}
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
         </div>
     );
 }
