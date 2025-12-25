@@ -51,13 +51,10 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
             pendingAmount: Number(debt.totalAmount) - Number(debt.paidAmount)
         }));
 
-        // Only count POSITIVE pending amounts as debts
-        // Negative amounts are abonos/payments, not debts
+        // Sum ALL pending amounts (positives are debts, negatives are abonos)
+        // This gives the NET debt after subtracting abonos
         const totalDebts = debtsWithPending.reduce((sum, debt) => {
-            if (debt.pendingAmount > 0) {
-                return sum + debt.pendingAmount;
-            }
-            return sum;
+            return sum + debt.pendingAmount;
         }, 0);
 
         // Count only debts with positive pending (not abonos)
