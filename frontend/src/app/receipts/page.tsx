@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
+import CameraCapture from '@/components/CameraCapture';
 
 export default function ReceiptsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -15,9 +16,6 @@ export default function ReceiptsPage() {
     const [ocrData, setOcrData] = useState<any>(null);
     const [receiptId, setReceiptId] = useState<string | null>(null);
     const [showCamera, setShowCamera] = useState(false);
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const streamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
@@ -25,61 +23,20 @@ export default function ReceiptsPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    useEffect(() => {
-        return () => {
-            // Cleanup camera stream on unmount
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-            }
-        };
-    }, []);
-
-    const startCamera = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' } // Use back camera on mobile
-            });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                streamRef.current = stream;
-                setShowCamera(true);
-            }
-        } catch (error) {
-            console.error('Error accessing camera:', error);
-            alert('No se pudo acceder a la cámara. Por favor verifica los permisos.');
+    const handleCameraCapture = (base64Data: string) => {
+        // Convert base64 to blob and then to file
+        const byteString = atob(base64Data);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
         }
-    };
-
-    const stopCamera = () => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
+        const blob = new Blob([ab], { type: 'image/jpeg' });
+        const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        setSelectedFile(file);
+        setPreview(`data:image/jpeg;base64,${base64Data}`);
         setShowCamera(false);
-    };
-
-    const capturePhoto = () => {
-        if (videoRef.current && canvasRef.current) {
-            const video = videoRef.current;
-            const canvas = canvasRef.current;
-
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(video, 0, 0);
-
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
-                        setSelectedFile(file);
-                        setPreview(canvas.toDataURL('image/jpeg'));
-                        stopCamera();
-                    }
-                }, 'image/jpeg', 0.95);
-            }
-        }
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +116,14 @@ export default function ReceiptsPage() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+            {/* Camera Capture Modal - Full Screen */}
+            {showCamera && (
+                <CameraCapture
+                    onCapture={handleCameraCapture}
+                    onClose={() => setShowCamera(false)}
+                />
+            )}
+
             <header className="bg-white shadow-sm">
                 <div className="container mx-auto px-4 py-4">
                     <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
@@ -182,32 +147,7 @@ export default function ReceiptsPage() {
 
                             <div className="space-y-4">
                                 <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden" style={{ minHeight: '400px' }}>
-                                    {showCamera ? (
-                                        <div className="w-full h-full bg-black">
-                                            <video
-                                                ref={videoRef}
-                                                autoPlay
-                                                playsInline
-                                                muted
-                                                className="w-full h-auto"
-                                                style={{ maxHeight: '400px', objectFit: 'contain' }}
-                                            />
-                                            <div className="p-4 flex gap-2">
-                                                <button
-                                                    onClick={capturePhoto}
-                                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-                                                >
-                                                    📷 Capturar Foto
-                                                </button>
-                                                <button
-                                                    onClick={stopCamera}
-                                                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-                                                >
-                                                    ❌ Cancelar
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : preview ? (
+                                    {preview ? (
                                         <div className="w-full p-4 flex flex-col items-center">
                                             <img
                                                 src={preview}
@@ -233,16 +173,18 @@ export default function ReceiptsPage() {
                                     )}
                                 </div>
 
-                                {!showCamera && !preview && (
+                                {!preview && (
                                     <div className="grid grid-cols-2 gap-3">
                                         <button
-                                            onClick={startCamera}
-                                            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                                            onClick={() => setShowCamera(true)}
+                                            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
                                         >
-                                            📷 Abrir Cámara
+                                            <span className="text-2xl">📷</span>
+                                            <span>Abrir Cámara</span>
                                         </button>
-                                        <label className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors cursor-pointer text-center">
-                                            📁 Subir Archivo
+                                        <label className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-4 px-6 rounded-xl transition-all cursor-pointer text-center shadow-lg flex items-center justify-center gap-2">
+                                            <span className="text-2xl">📁</span>
+                                            <span>Subir Archivo</span>
                                             <input
                                                 type="file"
                                                 accept="image/*"
@@ -253,7 +195,7 @@ export default function ReceiptsPage() {
                                     </div>
                                 )}
 
-                                {preview && !showCamera && (
+                                {preview && (
                                     <button
                                         onClick={handleUploadAndProcess}
                                         disabled={!selectedFile || uploading || processing}
@@ -349,9 +291,6 @@ export default function ReceiptsPage() {
                     </div>
                 </div>
             </main>
-
-            {/* Hidden canvas for photo capture */}
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
         </div>
     );
 }

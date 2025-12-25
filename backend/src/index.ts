@@ -41,7 +41,16 @@ app.use(express.urlencoded({ extended: true }));
 // Rate limiting
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100 // limit each IP to 100 requests per windowMs
+    max: 100, // limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req: Request, res: Response) => {
+        res.status(429).json({
+            error: 'Demasiadas solicitudes',
+            message: 'Has excedido el límite de solicitudes. Por favor, intenta de nuevo más tarde.',
+            retryAfter: Math.ceil((req.rateLimit?.resetTime?.getTime() - Date.now()) / 1000) || 900
+        });
+    }
 });
 app.use('/api/', limiter);
 

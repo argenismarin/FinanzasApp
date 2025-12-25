@@ -39,14 +39,16 @@ export default function AnalyticsPage() {
         queryKey: ['monthly-trend', months],
         queryFn: async () => {
             const response = await fetch(
-                `http://localhost:3001/api/analytics/monthly-trend?months=${months}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/analytics/overview`,
                 {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
                     },
                 }
             );
-            return response.json();
+            if (!response.ok) return { monthlyTrends: [] };
+            const data = await response.json();
+            return data.monthlyTrends || [];
         },
         enabled: isAuthenticated,
     });
@@ -55,14 +57,16 @@ export default function AnalyticsPage() {
         queryKey: ['category-breakdown', categoryType],
         queryFn: async () => {
             const response = await fetch(
-                `http://localhost:3001/api/analytics/category-breakdown?type=${categoryType}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/analytics/categories?type=${categoryType}`,
                 {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
                     },
                 }
             );
-            return response.json();
+            if (!response.ok) return { breakdown: [] };
+            const data = await response.json();
+            return { breakdown: data };
         },
         enabled: isAuthenticated,
     });
@@ -71,13 +75,14 @@ export default function AnalyticsPage() {
         queryKey: ['top-categories', categoryType],
         queryFn: async () => {
             const response = await fetch(
-                `http://localhost:3001/api/analytics/top-categories?limit=5&type=${categoryType}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/analytics/top-categories?limit=5&type=${categoryType}`,
                 {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
                     },
                 }
             );
+            if (!response.ok) return [];
             return response.json();
         },
         enabled: isAuthenticated,
@@ -94,26 +99,32 @@ export default function AnalyticsPage() {
     const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
     // Format trend data for chart
-    const trendChartData = trendData?.map((item: any) => ({
-        month: item.month,
-        Ingresos: item.income,
-        Gastos: item.expense,
-        Balance: item.balance,
-    })) || [];
+    const trendChartData = Array.isArray(trendData) 
+        ? trendData.map((item: any) => ({
+            month: item.month,
+            Ingresos: item.income || 0,
+            Gastos: item.expense || 0,
+            Balance: (item.income || 0) - (item.expense || 0),
+        }))
+        : [];
 
     // Format category data for pie chart
-    const pieChartData = categoryData?.breakdown?.map((item: any) => ({
-        name: item.category?.name || 'Sin categoría',
-        value: item.total,
-        percentage: item.percentage,
-    })) || [];
+    const pieChartData = Array.isArray(categoryData?.breakdown)
+        ? categoryData.breakdown.map((item: any) => ({
+            name: item.name || 'Sin categoría',
+            value: item.total || 0,
+            percentage: item.percentage || 0,
+        }))
+        : [];
 
     // Format top categories for bar chart
-    const barChartData = topCategories?.map((item: any) => ({
-        name: item.category?.name || 'Sin categoría',
-        total: item.total,
-        count: item.count,
-    })) || [];
+    const barChartData = Array.isArray(topCategories)
+        ? topCategories.map((item: any) => ({
+            name: item.category?.name || 'Sin categoría',
+            total: item.total || 0,
+            count: item.count || 0,
+        }))
+        : [];
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">

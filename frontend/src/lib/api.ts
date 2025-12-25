@@ -33,9 +33,6 @@ class ApiClient {
 
     // Auth
     async login(email: string, password?: string, name?: string) {
-        console.log('API_URL:', API_URL);
-        console.log('Login URL:', `${API_URL}/auth/login`);
-
         try {
             const body: any = { email };
             if (password) body.password = password;
@@ -47,12 +44,24 @@ class ApiClient {
                 body: JSON.stringify(body),
             });
 
-            console.log('Response status:', response.status);
-
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Login error:', errorData);
-                throw new Error(errorData.error || `Login failed: ${response.status}`);
+                // Try to parse as JSON, fallback to text if it fails
+                let errorMessage = `Error al iniciar sesión (${response.status})`;
+                try {
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorData.message || errorMessage;
+                        console.error('Login error (JSON):', errorData);
+                    } else {
+                        const textError = await response.text();
+                        errorMessage = textError || errorMessage;
+                        console.error('Login error (Text):', textError);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing response:', parseError);
+                }
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -70,7 +79,17 @@ class ApiClient {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to get user');
+            let errorMessage = 'No se pudo obtener información del usuario';
+            try {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                }
+            } catch (parseError) {
+                // Ignore parse errors, use default message
+            }
+            throw new Error(errorMessage);
         }
 
         return response.json();

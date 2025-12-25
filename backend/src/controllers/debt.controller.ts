@@ -43,7 +43,7 @@ export const getDebts = async (req: AuthRequest, res: Response) => {
 // Create new debt
 export const createDebt = async (req: AuthRequest, res: Response) => {
     try {
-        const { creditor, totalAmount, description, dueDate } = req.body;
+        const { creditor, totalAmount, description, date } = req.body;
         const userId = req.user!.id;
 
         if (!creditor || !totalAmount) {
@@ -57,7 +57,8 @@ export const createDebt = async (req: AuthRequest, res: Response) => {
                 totalAmount: parseFloat(totalAmount),
                 paidAmount: 0,
                 description,
-                dueDate: dueDate ? new Date(dueDate) : null
+                createdAt: date ? new Date(date) : new Date(),
+                dueDate: null
             }
         });
 

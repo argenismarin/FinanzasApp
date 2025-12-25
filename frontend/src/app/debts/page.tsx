@@ -16,7 +16,8 @@ export default function DebtsPage() {
     const [newDebt, setNewDebt] = useState({
         creditor: '',
         totalAmount: '',
-        description: ''
+        description: '',
+        date: ''
     });
 
     useEffect(() => {
@@ -58,7 +59,7 @@ export default function DebtsPage() {
         onSuccess: () => {
             refetch();
             setShowAddForm(false);
-            setNewDebt({ creditor: '', totalAmount: '', description: '' });
+            setNewDebt({ creditor: '', totalAmount: '', description: '', date: '' });
             alert('💳 Deuda registrada exitosamente!');
         },
     });
@@ -278,6 +279,16 @@ export default function DebtsPage() {
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                                 rows={2}
                             />
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de la Deuda</label>
+                                <input
+                                    type="date"
+                                    value={newDebt.date || ''}
+                                    onChange={(e) => setNewDebt({ ...newDebt, date: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Fecha en que se originó la deuda (opcional)</p>
+                            </div>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => createMutation.mutate(newDebt)}
@@ -384,9 +395,14 @@ export default function DebtsPage() {
                                                     <div key={debt.id} className="bg-white border border-red-200 rounded-lg p-4">
                                                         <div className="flex justify-between items-start mb-2">
                                                             <div className="flex-1">
-                                                                {debt.description && (
-                                                                    <p className="text-sm font-semibold text-gray-900">{debt.description}</p>
-                                                                )}
+                                                                <div className="flex items-start gap-2">
+                                                                    <span className="text-xl">💳</span>
+                                                                    <div className="flex-1">
+                                                                        <p className="text-sm font-semibold text-gray-900">
+                                                                            {debt.description || `Deuda con ${debt.creditor}`}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             <div className="flex gap-2">
                                                                 <button
@@ -412,6 +428,22 @@ export default function DebtsPage() {
                                                                 </button>
                                                             </div>
                                                         </div>
+                                                        
+                                                        {/* Fecha */}
+                                                        <div className="flex flex-wrap gap-3 mb-3 text-xs">
+                                                            <div className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
+                                                                <span>📅</span>
+                                                                <span className="text-gray-600">Fecha:</span>
+                                                                <span className="font-semibold text-gray-900">
+                                                                    {new Date(debt.createdAt).toLocaleDateString('es-CO', {
+                                                                        day: '2-digit',
+                                                                        month: 'short',
+                                                                        year: 'numeric'
+                                                                    })}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        
                                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                                                     <div>
                                                         <p className="text-gray-600">Total</p>
@@ -503,129 +535,162 @@ export default function DebtsPage() {
                 )}
 
                 {/* Abonos a tu Favor - Sección separada en verde */}
-                {actualAbonos.length > 0 && (
+                {actualAbonos.length > 0 ? (
                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-6 border-2 border-green-300">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="text-4xl">💚</div>
                                 <div>
                                     <h2 className="text-2xl font-bold text-green-800">Saldos a tu Favor</h2>
-                                    <p className="text-green-700 text-sm">Estos acreedores te deben dinero</p>
+                                    <p className="text-green-700 text-sm">
+                                        Tienes {actualAbonos.length} saldo{actualAbonos.length !== 1 ? 's' : ''} a tu favor - 
+                                        Estos acreedores te deben dinero
+                                    </p>
                                 </div>
                             </div>
                             <span className="bg-green-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
-                                {actualAbonos.length} abono{actualAbonos.length !== 1 ? 's' : ''}
+                                {actualAbonos.length} registro{actualAbonos.length !== 1 ? 's' : ''}
                             </span>
                         </div>
-                        <div className="space-y-6">
-                            {creditorGroups.filter((g: any) => g.netPending < 0).map((group: any) => (
-                                <div key={group.creditor} className="bg-white border-2 border-green-400 rounded-lg p-5 shadow-md">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <div>
-                                            <h3 className="font-bold text-xl text-gray-900">{group.creditor}</h3>
-                                            <p className="text-sm text-green-700 font-semibold">
-                                                ✅ Te debe {formatCOP(Math.abs(group.netPending))}
-                                            </p>
-                                        </div>
-                                        <div className="text-right bg-green-100 px-4 py-2 rounded-lg">
-                                            <p className="text-sm text-green-700 font-semibold">A tu favor</p>
-                                            <p className="text-3xl font-bold text-green-600">
-                                                {formatCOP(Math.abs(group.netPending))}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {group.abonos.map((abono: any) => (
-                                            <div key={abono.id} className="bg-green-50 border border-green-200 rounded-lg p-4">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex-1">
-                                                        {abono.description && (
-                                                            <p className="text-sm font-semibold text-gray-900">{abono.description}</p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => setEditingDebt({
-                                                                ...abono,
-                                                                totalAmount: abono.totalAmount.toString()
-                                                            })}
-                                                            className="text-blue-600 hover:bg-blue-50 p-2 rounded"
-                                                            title="Editar"
-                                                        >
-                                                            ✏️
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (confirm('¿Eliminar este abono?')) {
-                                                                    deleteMutation.mutate(abono.id);
-                                                                }
-                                                            }}
-                                                            className="text-red-600 hover:bg-red-50 p-2 rounded"
-                                                            title="Eliminar"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    </div>
+                        
+                        {/* Listado directo de todos los abonos */}
+                        <div className="space-y-4">
+                            {actualAbonos.map((abono: any) => (
+                                <div key={abono.id} className="bg-white border-2 border-green-400 rounded-lg p-5 shadow-md">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex-1">
+                                            <div className="flex items-start gap-2 mb-2">
+                                                <span className="text-2xl">💚</span>
+                                                <div className="flex-1">
+                                                    <p className="text-lg font-bold text-gray-900">
+                                                        {abono.creditor}
+                                                    </p>
+                                                    <p className="text-sm text-gray-700 mt-1">
+                                                        {abono.description || 'Saldo a tu favor'}
+                                                    </p>
                                                 </div>
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                                                    <div>
-                                                        <p className="text-gray-600">Total Original</p>
-                                                        <p className="font-semibold">{formatCOP(parseFloat(abono.totalAmount))}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-600">Ya pagaron</p>
-                                                        <p className="font-semibold text-green-600">{formatCOP(parseFloat(abono.paidAmount))}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-600">Aún te deben</p>
-                                                        <p className="font-bold text-green-600 text-lg">{formatCOP(Math.abs(abono.pendingAmount))}</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Payment History para abonos */}
-                                                {abono.payments && abono.payments.length > 0 && (
-                                                    <div className="mt-3">
-                                                        <button
-                                                            onClick={() => setExpandedPaymentHistory(
-                                                                expandedPaymentHistory === abono.id ? null : abono.id
-                                                            )}
-                                                            className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                                                        >
-                                                            {expandedPaymentHistory === abono.id ? '▼' : '▶'} 
-                                                            Historial de cobros ({abono.payments.length})
-                                                        </button>
-                                                        {expandedPaymentHistory === abono.id && (
-                                                            <div className="mt-2 space-y-2 bg-blue-50 p-3 rounded border border-blue-200">
-                                                                {abono.payments.map((payment: any) => (
-                                                                    <div key={payment.id} className="flex justify-between items-start text-sm border-b border-blue-100 pb-2 last:border-b-0">
-                                                                        <div>
-                                                                            <p className="font-semibold text-gray-900">
-                                                                                💵 {formatCOP(parseFloat(payment.amount))}
-                                                                            </p>
-                                                                            {payment.description && (
-                                                                                <p className="text-gray-600 text-xs">{payment.description}</p>
-                                                                            )}
-                                                                        </div>
-                                                                        <p className="text-gray-500 text-xs">
-                                                                            {new Date(payment.paymentDate).toLocaleDateString('es-CO', {
-                                                                                day: '2-digit',
-                                                                                month: 'short',
-                                                                                year: 'numeric',
-                                                                                hour: '2-digit',
-                                                                                minute: '2-digit'
-                                                                            })}
-                                                                        </p>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
                                             </div>
-                                        ))}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setEditingDebt({
+                                                    ...abono,
+                                                    totalAmount: abono.totalAmount.toString()
+                                                })}
+                                                className="text-blue-600 hover:bg-blue-50 p-2 rounded"
+                                                title="Editar"
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('¿Eliminar este abono?')) {
+                                                        deleteMutation.mutate(abono.id);
+                                                    }
+                                                }}
+                                                className="text-red-600 hover:bg-red-50 p-2 rounded"
+                                                title="Eliminar"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
                                     </div>
+                                    
+                                    {/* Fecha */}
+                                    <div className="flex flex-wrap gap-3 mb-3 text-xs">
+                                        <div className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
+                                            <span>📅</span>
+                                            <span className="text-gray-600">Fecha:</span>
+                                            <span className="font-semibold text-gray-900">
+                                                {new Date(abono.createdAt).toLocaleDateString('es-CO', {
+                                                    day: '2-digit',
+                                                    month: 'short',
+                                                    year: 'numeric'
+                                                })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-4">
+                                        <div>
+                                            <p className="text-gray-600">Total</p>
+                                            <p className="font-semibold text-lg">{formatCOP(parseFloat(abono.totalAmount))}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Cobrado</p>
+                                            <p className="font-semibold text-green-600 text-lg">{formatCOP(parseFloat(abono.paidAmount))}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Te deben</p>
+                                            <p className="font-bold text-green-600 text-xl">{formatCOP(Math.abs(abono.pendingAmount))}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Historial de cobros */}
+                                    {abono.payments && abono.payments.length > 0 && (
+                                        <div className="mt-3">
+                                            <button
+                                                onClick={() => setExpandedPaymentHistory(
+                                                    expandedPaymentHistory === abono.id ? null : abono.id
+                                                )}
+                                                className="text-sm text-green-600 hover:text-green-700 flex items-center gap-1 font-semibold"
+                                            >
+                                                {expandedPaymentHistory === abono.id ? '▼' : '▶'} 
+                                                Historial de cobros ({abono.payments.length})
+                                            </button>
+                                            {expandedPaymentHistory === abono.id && (
+                                                <div className="mt-2 space-y-2 bg-green-50 p-3 rounded border border-green-200">
+                                                    {abono.payments.map((payment: any) => (
+                                                        <div key={payment.id} className="flex justify-between items-start text-sm border-b border-green-100 pb-2 last:border-b-0">
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900">
+                                                                    💵 {formatCOP(parseFloat(payment.amount))}
+                                                                </p>
+                                                                {payment.description && (
+                                                                    <p className="text-gray-600 text-xs">{payment.description}</p>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-gray-500 text-xs">
+                                                                {new Date(payment.paymentDate).toLocaleDateString('es-CO', {
+                                                                    day: '2-digit',
+                                                                    month: 'short',
+                                                                    year: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-xl p-8 border-2 border-green-200">
+                        <div className="text-center">
+                            <div className="text-6xl mb-4">💚</div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">Sin Saldos a tu Favor</h3>
+                            <p className="text-gray-600 mb-4">
+                                Los "Saldos a tu Favor" aparecen cuando alguien te debe dinero o has pagado de más.
+                            </p>
+                            <div className="bg-white border border-green-300 rounded-lg p-4 text-left max-w-md mx-auto">
+                                <p className="text-sm text-gray-700 mb-2 font-semibold">
+                                    💡 ¿Cómo crear un Saldo a tu Favor?
+                                </p>
+                                <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+                                    <li>Registra una nueva deuda</li>
+                                    <li>Cuando registres un pago, pon un <strong>monto mayor al total</strong></li>
+                                    <li>El sistema automáticamente lo convertirá en "Saldo a tu Favor"</li>
+                                </ol>
+                                <p className="text-xs text-gray-500 mt-3 italic">
+                                    Ejemplo: Si una deuda es de $100,000 y registras un pago de $150,000, 
+                                    quedarás con un saldo a favor de $50,000.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
