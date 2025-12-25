@@ -16,6 +16,9 @@ import accountRoutes from './routes/account.routes';
 import receiptRoutes from './routes/receipt.routes';
 import checklistRoutes from './routes/checklist.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import debtRoutes from './routes/debt.routes';
+import savingRoutes from './routes/saving.routes';
+import balanceRoutes from './routes/balance.routes';
 
 // Load environment variables
 dotenv.config();
@@ -85,6 +88,9 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/checklist', checklistRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/debts', debtRoutes);
+app.use('/api/savings', savingRoutes);
+app.use('/api/balance', balanceRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
