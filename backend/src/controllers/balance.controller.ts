@@ -60,6 +60,9 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
             return sum;
         }, 0);
 
+        // Count only debts with positive pending (not abonos)
+        const actualDebtsCount = debtsWithPending.filter(d => d.pendingAmount > 0).length;
+
         // Calculate metrics
         const netWorth = bankBalance + totalSavings - totalDebts;
         // Savings are NOT in the bank, they're physically stored separately
@@ -74,7 +77,7 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
             availableToSpend,
             breakdown: {
                 savingsCount: savings.length,
-                debtsCount: debts.length,
+                debtsCount: actualDebtsCount, // Only positive debts
                 transactionsCount: transactions.length
             }
         });
