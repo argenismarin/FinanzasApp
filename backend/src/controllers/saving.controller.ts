@@ -38,6 +38,39 @@ export const createSaving = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'Name and amount are required' });
         }
 
+        // Get or create a default category for savings deposit
+        let savingsCategory = await prisma.category.findFirst({
+            where: {
+                userId,
+                name: 'Ahorro en Cajita'
+            }
+        });
+
+        if (!savingsCategory) {
+            savingsCategory = await prisma.category.create({
+                data: {
+                    userId,
+                    name: 'Ahorro en Cajita',
+                    type: 'EXPENSE',
+                    color: '#10b981',
+                    icon: '🏦'
+                }
+            });
+        }
+
+        // Create expense transaction for putting money in savings
+        await prisma.transaction.create({
+            data: {
+                userId,
+                amount: parseFloat(amount),
+                type: 'EXPENSE',
+                categoryId: savingsCategory.id,
+                description: `Ahorro en: ${name}`,
+                date: new Date(),
+                createdBy: userId
+            }
+        });
+
         const saving = await prisma.saving.create({
             data: {
                 userId,

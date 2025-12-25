@@ -135,6 +135,25 @@ export default function DebtsPage() {
     const debts = Array.isArray(debtsData) ? debtsData : [];
     const totalDebt = debts.reduce((sum, debt) => sum + debt.pendingAmount, 0);
 
+    // Group debts by creditor
+    const groupedDebts = debts.reduce((acc: any, debt: any) => {
+        const creditor = debt.creditor;
+        if (!acc[creditor]) {
+            acc[creditor] = {
+                creditor,
+                debts: [],
+                totalAmount: 0,
+                totalPending: 0
+            };
+        }
+        acc[creditor].debts.push(debt);
+        acc[creditor].totalAmount += parseFloat(debt.totalAmount);
+        acc[creditor].totalPending += debt.pendingAmount;
+        return acc;
+    }, {});
+
+    const creditorGroups = Object.values(groupedDebts);
+
     if (authLoading || isLoading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center">
@@ -292,74 +311,93 @@ export default function DebtsPage() {
 
                 {/* Debts List */}
                 <div className="bg-white rounded-2xl shadow-xl p-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Lista de Deudas</h2>
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Deudas por Acreedor</h2>
                     {debts.length === 0 ? (
                         <p className="text-gray-500 text-center py-8">No tienes deudas registradas</p>
                     ) : (
-                        <div className="space-y-4">
-                            {debts.map((debt: any) => (
-                                <div key={debt.id} className="border border-gray-200 rounded-lg p-4">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="flex-1">
-                                            <h3 className="font-bold text-lg text-gray-900">{debt.creditor}</h3>
-                                            {debt.description && (
-                                                <p className="text-sm text-gray-600">{debt.description}</p>
-                                            )}
+                        <div className="space-y-6">
+                            {creditorGroups.map((group: any) => (
+                                <div key={group.creditor} className="border-2 border-red-200 rounded-lg p-4 bg-red-50">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-xl text-gray-900">{group.creditor}</h3>
+                                            <p className="text-sm text-gray-600">
+                                                {group.debts.length} deuda{group.debts.length > 1 ? 's' : ''}
+                                            </p>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => setEditingDebt({
-                                                    ...debt,
-                                                    totalAmount: debt.totalAmount.toString()
-                                                })}
-                                                className="text-blue-600 hover:bg-blue-50 p-2 rounded"
-                                                title="Editar"
-                                            >
-                                                ✏️
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    if (confirm('¿Eliminar esta deuda?')) {
-                                                        deleteMutation.mutate(debt.id);
-                                                    }
-                                                }}
-                                                className="text-red-600 hover:bg-red-50 p-2 rounded"
-                                                title="Eliminar"
-                                            >
-                                                🗑️
-                                            </button>
+                                        <div className="text-right">
+                                            <p className="text-sm text-gray-600">Total Pendiente</p>
+                                            <p className="text-2xl font-bold text-red-600">
+                                                {formatCOP(group.totalPending)}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <p className="text-gray-600">Total</p>
-                                            <p className="font-semibold">{formatCOP(parseFloat(debt.totalAmount))}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-gray-600">Pagado</p>
-                                            <p className="font-semibold text-green-600">{formatCOP(parseFloat(debt.paidAmount))}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-gray-600">Pendiente</p>
-                                            <p className="font-bold text-red-600">{formatCOP(debt.pendingAmount)}</p>
-                                        </div>
-                                        <div>
-                                            {debt.dueDate && (
-                                                <>
-                                                    <p className="text-gray-600">Vence</p>
-                                                    <p className="font-semibold">{new Date(debt.dueDate).toLocaleDateString('es-CO')}</p>
-                                                </>
-                                            )}
-                                        </div>
+                                    <div className="space-y-3">
+                                        {group.debts.map((debt: any) => (
+                                            <div key={debt.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex-1">
+                                                        {debt.description && (
+                                                            <p className="text-sm font-semibold text-gray-900">{debt.description}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => setEditingDebt({
+                                                                ...debt,
+                                                                totalAmount: debt.totalAmount.toString()
+                                                            })}
+                                                            className="text-blue-600 hover:bg-blue-50 p-2 rounded"
+                                                            title="Editar"
+                                                        >
+                                                            ✏️
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('¿Eliminar esta deuda?')) {
+                                                                    deleteMutation.mutate(debt.id);
+                                                                }
+                                                            }}
+                                                            className="text-red-600 hover:bg-red-50 p-2 rounded"
+                                                            title="Eliminar"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                    <div>
+                                                        <p className="text-gray-600">Total</p>
+                                                        <p className="font-semibold">{formatCOP(parseFloat(debt.totalAmount))}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-600">Pagado</p>
+                                                        <p className="font-semibold text-green-600">{formatCOP(parseFloat(debt.paidAmount))}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-600">Pendiente</p>
+                                                        <p className="font-bold text-red-600">{formatCOP(debt.pendingAmount)}</p>
+                                                    </div>
+                                                    <div>
+                                                        {debt.dueDate && (
+                                                            <>
+                                                                <p className="text-gray-600">Vence</p>
+                                                                <p className="font-semibold">{new Date(debt.dueDate).toLocaleDateString('es-CO')}</p>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {debt.pendingAmount > 0 && (
+                                                    <button
+                                                        onClick={() => handlePayment(debt)}
+                                                        className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg"
+                                                    >
+                                                        💰 Registrar Pago
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
-                                    {debt.pendingAmount > 0 && (
-                                        <button
-                                            onClick={() => handlePayment(debt)}
-                                            className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg"
-                                        >
-                                            💰 Registrar Pago
-                                        </button>
-                                    )}
                                 </div>
                             ))}
                         </div>

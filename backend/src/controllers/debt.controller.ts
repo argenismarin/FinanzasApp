@@ -120,6 +120,39 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'Payment exceeds total debt amount' });
         }
 
+        // Get or create a default category for debt payments
+        let debtCategory = await prisma.category.findFirst({
+            where: {
+                userId,
+                name: 'Pago de Deuda'
+            }
+        });
+
+        if (!debtCategory) {
+            debtCategory = await prisma.category.create({
+                data: {
+                    userId,
+                    name: 'Pago de Deuda',
+                    type: 'EXPENSE',
+                    color: '#ef4444',
+                    icon: '💳'
+                }
+            });
+        }
+
+        // Create expense transaction for debt payment
+        await prisma.transaction.create({
+            data: {
+                userId,
+                amount: parseFloat(amount),
+                type: 'EXPENSE',
+                categoryId: debtCategory.id,
+                description: `Pago a: ${debt.creditor}`,
+                date: new Date(),
+                createdBy: userId
+            }
+        });
+
         const updated = await prisma.debt.update({
             where: { id },
             data: {
