@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TransactionType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -44,12 +44,13 @@ export const getAnalyticsOverview = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        res.json({
-            monthlyTrends: Object.entries(monthlyData).map(([month, data]) => ({
-                month,
-                ...data
-            }))
-        });
+        const monthlyTrends = Object.entries(monthlyData).map(([month, data]) => ({
+            month,
+            income: (data as any).income,
+            expense: (data as any).expense
+        }));
+
+        res.json({ monthlyTrends });
     } catch (error) {
         console.error('Get analytics overview error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -63,7 +64,9 @@ export const getCategoryBreakdown = async (req: AuthRequest, res: Response) => {
         const { startDate, endDate, type } = req.query;
 
         const where: any = { userId };
-        if (type) where.type = type;
+        if (type && (type === 'INCOME' || type === 'EXPENSE')) {
+            where.type = type as TransactionType;
+        }
         if (startDate && endDate) {
             where.date = {
                 gte: new Date(startDate as string),
@@ -94,7 +97,9 @@ export const getCategoryBreakdown = async (req: AuthRequest, res: Response) => {
         });
 
         const breakdown = Object.values(categoryData).map((cat: any) => ({
-            ...cat,
+            name: cat.name,
+            icon: cat.icon,
+            total: cat.total,
             percentage: total > 0 ? (cat.total / total) * 100 : 0
         }));
 
@@ -111,8 +116,13 @@ export const getTopCategories = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const { limit = '5', type = 'EXPENSE' } = req.query;
 
+        const where: any = { userId };
+        if (type && (type === 'INCOME' || type === 'EXPENSE')) {
+            where.type = type as TransactionType;
+        }
+
         const transactions = await prisma.transaction.findMany({
-            where: { userId, type: type as string },
+            where,
             include: { category: true }
         });
 

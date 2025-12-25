@@ -15,17 +15,16 @@ interface AuthRequest extends Request {
 export const getChecklistItems = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
-        const { month, year } = req.query;
-
-        const where: any = { userId };
-        if (month && year) {
-            where.month = parseInt(month as string);
-            where.year = parseInt(year as string);
-        }
 
         const items = await prisma.checklistItem.findMany({
-            where,
-            include: { category: true },
+            where: { userId },
+            include: {
+                category: true,
+                completions: {
+                    orderBy: { month: 'desc' },
+                    take: 12
+                }
+            },
             orderBy: { dueDay: 'asc' }
         });
 
@@ -39,26 +38,22 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
 // Create checklist item
 export const createChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, amount, categoryId, dueDay, isRecurring } = req.body;
+        const { name, amount, categoryId, dueDay } = req.body;
         const userId = req.user!.id;
 
         if (!name || !amount || !categoryId || !dueDay) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        const now = new Date();
         const item = await prisma.checklistItem.create({
             data: {
                 userId,
                 name,
                 amount: parseFloat(amount),
                 categoryId,
-                dueDay: parseInt(dueDay),
-                isRecurring: isRecurring !== false,
-                month: now.getMonth() + 1,
-                year: now.getFullYear()
+                dueDay: parseInt(dueDay)
             },
-            include: { category: true }
+            include: { category: true, completions: true }
         });
 
         res.status(201).json(item);
@@ -68,7 +63,7 @@ export const createChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Toggle checklist item
+// Toggle checklist item completion for current month
 export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
@@ -82,13 +77,42 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Checklist item not found' });
         }
 
-        const updated = await prisma.checklistItem.update({
-            where: { id },
-            data: { isPaid: !item.isPaid },
-            include: { category: true }
+        // Get current month (first day of month)
+        const now = new Date();
+        const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // Check if there's a completion for this month
+        const existingCompletion = await prisma.checklistCompletion.findFirst({
+            where: {
+                checklistItemId: id,
+                month: currentMonth
+            }
         });
 
-        res.json(updated);
+        if (existingCompletion) {
+            // Toggle completion
+            const updated = await prisma.checklistCompletion.update({
+                where: { id: existingCompletion.id },
+                data: {
+                    isCompleted: !existingCompletion.isCompleted,
+                    completedAt: !existingCompletion.isCompleted ? new Date() : null
+                }
+            });
+
+            res.json(updated);
+        } else {
+            // Create new completion
+            const completion = await prisma.checklistCompletion.create({
+                data: {
+                    checklistItemId: id,
+                    month: currentMonth,
+                    isCompleted: true,
+                    completedAt: new Date()
+                }
+            });
+
+            res.json(completion);
+        }
     } catch (error) {
         console.error('Toggle checklist item error:', error);
         res.status(500).json({ error: 'Internal server error' });

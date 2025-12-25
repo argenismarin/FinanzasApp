@@ -58,14 +58,14 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
+        // Store the relative path that will be served by Express
+        const imageUrl = `/uploads/receipts/${file.filename}`;
+
         const receipt = await prisma.receipt.create({
             data: {
                 userId,
-                filename: file.filename,
-                originalName: file.originalname,
-                filePath: file.path,
-                fileSize: file.size,
-                mimeType: file.mimetype
+                imageUrl,
+                status: 'PENDING'
             }
         });
 
@@ -83,7 +83,6 @@ export const getReceipts = async (req: AuthRequest, res: Response) => {
 
         const receipts = await prisma.receipt.findMany({
             where: { userId },
-            include: { transaction: true },
             orderBy: { createdAt: 'desc' }
         });
 
@@ -112,10 +111,17 @@ export const processReceipt = async (req: AuthRequest, res: Response) => {
             return res.status(500).json({ error: 'OpenAI API key not configured' });
         }
 
+        // Construct the full file path from imageUrl
+        const filePath = path.join(process.cwd(), 'uploads', 'receipts', path.basename(receipt.imageUrl));
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Receipt image file not found' });
+        }
+
         // Read the image file
-        const imageBuffer = fs.readFileSync(receipt.filePath);
+        const imageBuffer = fs.readFileSync(filePath);
         const base64Image = imageBuffer.toString('base64');
-        const mimeType = receipt.mimeType || 'image/jpeg';
+        const mimeType = 'image/jpeg'; // Default to jpeg for uploaded images
 
         // Call OpenAI Vision API
         const response = await openai.chat.completions.create({
@@ -172,12 +178,21 @@ Si no encuentras algún dato, usa valores razonables o null. Responde SOLO con e
             throw new Error('Failed to parse OCR response');
         }
 
+        // Extract structured data for database fields
+        const extractedAmount = ocrData.amount ? parseFloat(ocrData.amount) : null;
+        const extractedDate = ocrData.date ? new Date(ocrData.date) : null;
+        const extractedMerchant = ocrData.merchant || null;
+
         // Update receipt with OCR data
         const updated = await prisma.receipt.update({
             where: { id },
             data: {
                 ocrData: ocrData as any,
-                isProcessed: true
+                extractedAmount: extractedAmount,
+                extractedDate: extractedDate,
+                extractedMerchant: extractedMerchant,
+                confidenceScore: 0.95,
+                status: 'APPROVED'
             }
         });
 
@@ -206,8 +221,9 @@ export const deleteReceipt = async (req: AuthRequest, res: Response) => {
         }
 
         // Delete the file
-        if (fs.existsSync(receipt.filePath)) {
-            fs.unlinkSync(receipt.filePath);
+        const filePath = path.join(process.cwd(), 'uploads', 'receipts', path.basename(receipt.imageUrl));
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
         }
 
         await prisma.receipt.delete({ where: { id } });
