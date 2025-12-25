@@ -97,17 +97,25 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Create checklist item (permanent template)
+// Create checklist item with creation date from selected month for planning
 export const createChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, amount, categoryId, dueDay } = req.body;
+        const { name, amount, categoryId, dueDay, month, year } = req.body;
         const userId = req.user!.id;
 
-        console.log('Creating checklist item:', { name, amount, categoryId, dueDay, userId });
+        console.log('Creating checklist item:', { name, amount, categoryId, dueDay, month, year, userId });
 
         if (!name || !amount || !categoryId || !dueDay) {
             return res.status(400).json({ error: 'Missing required fields: name, amount, categoryId, dueDay' });
         }
+
+        // Parse month and year, default to current month
+        const now = new Date();
+        const selectedMonth = month ? parseInt(month as string) : now.getMonth() + 1;
+        const selectedYear = year ? parseInt(year as string) : now.getFullYear();
+
+        // Set createdAt to first day of selected month for planning
+        const creationDate = new Date(selectedYear, selectedMonth - 1, 1);
 
         const item = await prisma.checklistItem.create({
             data: {
@@ -116,12 +124,13 @@ export const createChecklistItem = async (req: AuthRequest, res: Response) => {
                 amount: parseFloat(amount),
                 categoryId,
                 dueDay: parseInt(dueDay),
-                isActive: true
+                isActive: true,
+                createdAt: creationDate
             },
             include: { category: true, completions: true }
         });
 
-        console.log('Checklist item created successfully:', item.id);
+        console.log(`Item created for ${selectedMonth}/${selectedYear}:`, item.id);
         res.status(201).json(item);
     } catch (error: any) {
         console.error('Create checklist item error:', error);

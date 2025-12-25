@@ -128,6 +128,8 @@ export default function ChecklistPage() {
             ...newItem,
             amount: parseFloat(newItem.amount),
             dueDay: parseInt(newItem.dueDay),
+            month: selectedMonth,
+            year: selectedYear,
         });
     };
 
