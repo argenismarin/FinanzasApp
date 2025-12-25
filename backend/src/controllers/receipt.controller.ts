@@ -2,8 +2,13 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+import OpenAI from 'openai';
 
 const prisma = new PrismaClient();
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
 
 interface AuthRequest extends Request {
     user?: {
@@ -16,7 +21,11 @@ interface AuthRequest extends Request {
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/receipts/');
+        const dir = 'uploads/receipts/';
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -28,13 +37,13 @@ export const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|pdf/;
+        const allowedTypes = /jpeg|jpg|png/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
         const mimetype = allowedTypes.test(file.mimetype);
         if (extname && mimetype) {
             cb(null, true);
         } else {
-            cb(new Error('Only images and PDFs are allowed'));
+            cb(new Error('Only images (JPEG, JPG, PNG) are allowed'));
         }
     }
 });
@@ -85,7 +94,7 @@ export const getReceipts = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Process receipt with OCR (placeholder)
+// Process receipt with OCR using OpenAI Vision
 export const processReceipt = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
@@ -99,14 +108,71 @@ export const processReceipt = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Receipt not found' });
         }
 
-        // Placeholder OCR data - in production, integrate with OCR service
-        const ocrData = {
-            amount: 0,
-            date: new Date(),
-            merchant: 'Unknown',
-            items: []
-        };
+        if (!process.env.OPENAI_API_KEY) {
+            return res.status(500).json({ error: 'OpenAI API key not configured' });
+        }
 
+        // Read the image file
+        const imageBuffer = fs.readFileSync(receipt.filePath);
+        const base64Image = imageBuffer.toString('base64');
+        const mimeType = receipt.mimeType || 'image/jpeg';
+
+        // Call OpenAI Vision API
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: `Analiza esta factura/recibo y extrae la siguiente información en formato JSON:
+{
+  "merchant": "nombre del comercio o negocio",
+  "amount": "monto total (solo el número, sin símbolos)",
+  "currency": "moneda (COP, USD, EUR, etc)",
+  "date": "fecha en formato ISO (YYYY-MM-DD)",
+  "items": [
+    {
+      "description": "nombre del producto/servicio",
+      "quantity": "cantidad",
+      "price": "precio unitario"
+    }
+  ],
+  "category": "categoría sugerida (Alimentación, Transporte, Entretenimiento, Salud, etc)"
+}
+
+Si no encuentras algún dato, usa valores razonables o null. Responde SOLO con el JSON, sin texto adicional.`
+                        },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: `data:${mimeType};base64,${base64Image}`
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens: 1000
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (!content) {
+            throw new Error('No response from OpenAI');
+        }
+
+        // Parse the JSON response
+        let ocrData;
+        try {
+            // Remove markdown code blocks if present
+            const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            ocrData = JSON.parse(cleanContent);
+        } catch (parseError) {
+            console.error('Error parsing OpenAI response:', content);
+            throw new Error('Failed to parse OCR response');
+        }
+
+        // Update receipt with OCR data
         const updated = await prisma.receipt.update({
             where: { id },
             data: {
@@ -116,9 +182,12 @@ export const processReceipt = async (req: AuthRequest, res: Response) => {
         });
 
         res.json(updated);
-    } catch (error) {
+    } catch (error: any) {
         console.error('Process receipt error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({
+            error: 'Error processing receipt',
+            details: error.message
+        });
     }
 };
 
@@ -134,6 +203,11 @@ export const deleteReceipt = async (req: AuthRequest, res: Response) => {
 
         if (!receipt) {
             return res.status(404).json({ error: 'Receipt not found' });
+        }
+
+        // Delete the file
+        if (fs.existsSync(receipt.filePath)) {
+            fs.unlinkSync(receipt.filePath);
         }
 
         await prisma.receipt.delete({ where: { id } });
