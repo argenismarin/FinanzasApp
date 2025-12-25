@@ -13,10 +13,9 @@ import budgetRoutes from './routes/budget.routes';
 import goalRoutes from './routes/goal.routes';
 import reminderRoutes from './routes/reminder.routes';
 import accountRoutes from './routes/account.routes';
-// Temporarily disabled for deployment
-// import receiptRoutes from './routes/receipt.routes';
-// import checklistRoutes from './routes/checklist.routes';
-// import analyticsRoutes from './routes/analytics.routes';
+import receiptRoutes from './routes/receipt.routes';
+import checklistRoutes from './routes/checklist.routes';
+import analyticsRoutes from './routes/analytics.routes';
 
 // Load environment variables
 dotenv.config();
@@ -74,10 +73,9 @@ app.use('/api/budgets', budgetRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/accounts', accountRoutes);
-// Temporarily disabled for deployment
-// app.use('/api/receipts', receiptRoutes);
-// app.use('/api/checklist', checklistRoutes);
-// app.use('/api/analytics', analyticsRoutes);
+app.use('/api/receipts', receiptRoutes);
+app.use('/api/checklist', checklistRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
