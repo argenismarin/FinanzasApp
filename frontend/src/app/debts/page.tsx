@@ -134,47 +134,32 @@ export default function DebtsPage() {
 
     const debts = Array.isArray(debtsData) ? debtsData : [];
 
-    // Separate debts and credits
-    const actualDebts = debts.filter((d: any) => !d.isCredit);
-    const credits = debts.filter((d: any) => d.isCredit);
-
-    // Only count actual debts in total
-    const totalDebt = actualDebts.reduce((sum, debt) => sum + debt.pendingAmount, 0);
-
-    // Group debts by creditor (excluding credits for now, or handle separately)
-    const groupedDebts = actualDebts.reduce((acc: any, debt: any) => {
+    // Group all debts by creditor (same name = same creditor)
+    // Negative amounts are abonos that subtract from the total
+    const groupedDebts = debts.reduce((acc: any, debt: any) => {
         const creditor = debt.creditor;
         if (!acc[creditor]) {
             acc[creditor] = {
                 creditor,
                 debts: [],
-                totalAmount: 0,
                 totalPending: 0
             };
         }
         acc[creditor].debts.push(debt);
-        acc[creditor].totalAmount += parseFloat(debt.totalAmount);
+        // Sum all pending amounts (negatives subtract automatically)
         acc[creditor].totalPending += debt.pendingAmount;
         return acc;
     }, {});
 
-    // Group credits by creditor
-    const groupedCredits = credits.reduce((acc: any, credit: any) => {
-        const creditor = credit.creditor;
-        if (!acc[creditor]) {
-            acc[creditor] = {
-                creditor,
-                credits: [],
-                totalCredit: 0
-            };
-        }
-        acc[creditor].credits.push(credit);
-        acc[creditor].totalCredit += (credit.creditAmount || 0);
-        return acc;
-    }, {});
-
     const creditorGroups = Object.values(groupedDebts);
-    const creditGroups = Object.values(groupedCredits);
+
+    // Count unique creditors
+    const uniqueCreditors = Object.keys(groupedDebts).length;
+
+    // Total debt across all creditors (sum of all pending amounts)
+    const totalDebt = creditorGroups.reduce((sum: number, group: any) => {
+        return sum + group.totalPending;
+    }, 0);
 
     if (authLoading || isLoading) {
         return (
@@ -201,18 +186,15 @@ export default function DebtsPage() {
 
                 {/* Summary Card */}
                 <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <p className="text-sm text-gray-600">Total de Deudas</p>
                             <p className="text-2xl font-bold text-red-600">{formatCOP(totalDebt)}</p>
+                            <p className="text-xs text-gray-500 mt-1">Abonos ya restados</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Registros de Deuda</p>
-                            <p className="text-2xl font-bold text-gray-900">{actualDebts.length}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-600">Créditos a Favor</p>
-                            <p className="text-2xl font-bold text-green-600">{credits.length}</p>
+                            <p className="text-sm text-gray-600">Acreedores Únicos</p>
+                            <p className="text-2xl font-bold text-gray-900">{uniqueCreditors}</p>
                         </div>
                         <div>
                             <button
@@ -429,93 +411,6 @@ export default function DebtsPage() {
                         </div>
                     )}
                 </div>
-
-                {/* Credits List */}
-                {credits.length > 0 && (
-                    <div className="bg-white rounded-2xl shadow-xl p-6 mt-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">💵 Créditos a Tu Favor</h2>
-                        <div className="space-y-6">
-                            {creditGroups.map((group: any) => (
-                                <div key={group.creditor} className="border-2 border-green-200 rounded-lg p-4 bg-green-50">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <div>
-                                            <h3 className="font-bold text-xl text-gray-900">{group.creditor}</h3>
-                                            <p className="text-sm text-gray-600">
-                                                {group.credits.length} crédito{group.credits.length > 1 ? 's' : ''} a favor
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm text-gray-600">Te deben</p>
-                                            <p className="text-2xl font-bold text-green-600">
-                                                {formatCOP(group.totalCredit)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {group.credits.map((credit: any) => (
-                                            <div key={credit.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex-1">
-                                                        {credit.description && (
-                                                            <p className="text-sm font-semibold text-gray-900">{credit.description}</p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => setEditingDebt({
-                                                                ...credit,
-                                                                totalAmount: credit.totalAmount.toString()
-                                                            })}
-                                                            className="text-blue-600 hover:bg-blue-50 p-2 rounded"
-                                                            title="Editar"
-                                                        >
-                                                            ✏️
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (confirm('¿Eliminar este crédito?')) {
-                                                                    deleteMutation.mutate(credit.id);
-                                                                }
-                                                            }}
-                                                            className="text-red-600 hover:bg-red-50 p-2 rounded"
-                                                            title="Eliminar"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                                                    <div>
-                                                        <p className="text-gray-600">Monto Original</p>
-                                                        <p className="font-semibold text-green-600">
-                                                            {formatCOP(Math.abs(parseFloat(credit.totalAmount)))}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-600">Te Deben</p>
-                                                        <p className="font-bold text-green-600">
-                                                            {formatCOP(credit.creditAmount || 0)}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        {credit.dueDate && (
-                                                            <>
-                                                                <p className="text-gray-600">Fecha</p>
-                                                                <p className="font-semibold">
-                                                                    {new Date(credit.dueDate).toLocaleDateString('es-CO')}
-                                                                </p>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
