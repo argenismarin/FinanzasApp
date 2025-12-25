@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 export default function TransactionsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -48,6 +49,29 @@ export default function TransactionsPage() {
 
     const transactions = data?.data || [];
 
+    const exportToExcel = () => {
+        if (transactions.length === 0) {
+            alert('No hay transacciones para exportar');
+            return;
+        }
+
+        const exportData = transactions.map((t: any) => ({
+            Fecha: new Date(t.date).toLocaleDateString('es-CO'),
+            Tipo: t.type === 'INCOME' ? 'Ingreso' : 'Gasto',
+            Categoría: t.category.name,
+            Descripción: t.description,
+            Monto: Number(t.amount),
+            Moneda: t.currency
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Transacciones');
+
+        const fileName = `transacciones_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             {/* Header */}
@@ -56,12 +80,20 @@ export default function TransactionsPage() {
                     <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
                         ← Dashboard
                     </Link>
-                    <Link
-                        href="/transactions/new"
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                    >
-                        + Nueva Transacción
-                    </Link>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={exportToExcel}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
+                        >
+                            📥 Exportar Excel
+                        </button>
+                        <Link
+                            href="/transactions/new"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                            + Nueva Transacción
+                        </Link>
+                    </div>
                 </div>
             </header>
 
@@ -73,8 +105,8 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setFilter('all')}
                             className={`px-4 py-2 rounded-lg font-medium transition ${filter === 'all'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                         >
                             Todas
@@ -82,8 +114,8 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setFilter('INCOME')}
                             className={`px-4 py-2 rounded-lg font-medium transition ${filter === 'INCOME'
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                         >
                             💰 Ingresos
@@ -91,8 +123,8 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setFilter('EXPENSE')}
                             className={`px-4 py-2 rounded-lg font-medium transition ${filter === 'EXPENSE'
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                         >
                             💸 Gastos
