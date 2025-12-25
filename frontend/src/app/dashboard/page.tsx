@@ -226,6 +226,21 @@ export default function DashboardPage() {
                             </div>
                         </div>
                     </Link>
+
+                    <Link
+                        href="/accounts"
+                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-teal-100 rounded-full p-4">
+                                <span className="text-3xl">💳</span>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Cuentas Bancarias</h3>
+                                <p className="text-sm text-gray-600">Gestiona tus cuentas</p>
+                            </div>
+                        </div>
+                    </Link>
                 </div>
             </main>
         </div>
