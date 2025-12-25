@@ -22,45 +22,57 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
         const selectedMonth = month ? parseInt(month as string) : now.getMonth() + 1;
         const selectedYear = year ? parseInt(year as string) : now.getFullYear();
 
-        // Create date for first day of selected month
-        const monthDate = new Date(selectedYear, selectedMonth - 1, 1);
+        // Create dates for the selected month
         const firstDayOfMonth = new Date(selectedYear, selectedMonth - 1, 1);
+        const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0, 23, 59, 59);
 
-        // Build the where clause
-        const whereClause: any = {
-            userId,
-            // Show items created BEFORE or DURING the selected month
-            // (createdAt must be <= last day of selected month)
-            createdAt: {
-                lte: new Date(selectedYear, selectedMonth, 0, 23, 59, 59)
-            }
-        };
+        console.log(`Fetching checklist for ${selectedMonth}/${selectedYear}`);
+        console.log(`First day: ${firstDayOfMonth.toISOString()}`);
+        console.log(`Last day: ${lastDayOfMonth.toISOString()}`);
 
-        // Add condition for deletedAt:
-        // Show item if:
-        // 1. It's NOT deleted (deletedAt is null)
-        // 2. OR it was deleted AFTER the first day of selected month
-        // This means: item appears from creation month until (and including) deletion month
-        whereClause.OR = [
-            { deletedAt: null },                        // Not deleted at all
-            { deletedAt: { gte: firstDayOfMonth } }     // Deleted during or after this month
-        ];
-
-        const items = await prisma.checklistItem.findMany({
-            where: whereClause,
+        // Fetch all active items for this user
+        const allItems = await prisma.checklistItem.findMany({
+            where: { userId },
             include: {
                 category: true,
                 completions: {
-                    where: { month: monthDate },
+                    where: { month: firstDayOfMonth },
                     include: { transaction: true }
                 }
             },
             orderBy: { dueDay: 'asc' }
         });
 
+        // Filter items based on creation and deletion dates
+        const filteredItems = allItems.filter(item => {
+            // Item must be created BEFORE or DURING this month
+            const createdBeforeOrDuringMonth = item.createdAt <= lastDayOfMonth;
+
+            // If not created yet in this month, don't show
+            if (!createdBeforeOrDuringMonth) {
+                console.log(`Item ${item.name} not created yet (created: ${item.createdAt.toISOString()})`);
+                return false;
+            }
+
+            // If never deleted, always show (after creation)
+            if (!item.deletedAt) {
+                return true;
+            }
+
+            // If deleted, only show if deletion happened AFTER this month
+            // (item should appear from creation month up to and including deletion month)
+            const deletedAfterMonth = item.deletedAt > lastDayOfMonth;
+
+            if (!deletedAfterMonth) {
+                console.log(`Item ${item.name} was deleted (deleted: ${item.deletedAt.toISOString()})`);
+            }
+
+            return deletedAfterMonth;
+        });
+
         // Transform to include isCompleted flag for THIS SPECIFIC MONTH
-        const itemsWithCompletion = items.map(item => {
-            const completion = item.completions[0]; // Should only be one per month
+        const itemsWithCompletion = filteredItems.map(item => {
+            const completion = item.completions[0];
             return {
                 id: item.id,
                 name: item.name,
@@ -70,13 +82,14 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
                 dueDay: item.dueDay,
                 isActive: item.isActive,
                 createdAt: item.createdAt,
-                // Month-specific completion data
+                deletedAt: item.deletedAt,
                 isCompleted: completion ? completion.isCompleted : false,
                 completedAt: completion ? completion.completedAt : null,
                 transactionId: completion ? completion.transactionId : null
             };
         });
 
+        console.log(`Returning ${itemsWithCompletion.length} items`);
         res.json(itemsWithCompletion);
     } catch (error) {
         console.error('Get checklist items error:', error);
@@ -226,7 +239,7 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Delete checklist item (soft delete)
+// Delete checklist item (soft delete with timestamp)
 export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
@@ -250,6 +263,7 @@ export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
             }
         });
 
+        console.log(`Item ${item.name} deleted at ${new Date().toISOString()}`);
         res.json({ message: 'Checklist item deleted successfully' });
     } catch (error) {
         console.error('Delete checklist item error:', error);
