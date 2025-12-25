@@ -181,50 +181,54 @@ export default function ReceiptsPage() {
                             </h2>
 
                             <div className="space-y-4">
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center min-h-[300px] flex items-center justify-center">
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden" style={{ minHeight: '400px' }}>
                                     {showCamera ? (
-                                        <div className="w-full">
+                                        <div className="w-full h-full bg-black">
                                             <video
                                                 ref={videoRef}
                                                 autoPlay
                                                 playsInline
-                                                className="w-full rounded-lg"
+                                                muted
+                                                className="w-full h-auto"
+                                                style={{ maxHeight: '400px', objectFit: 'contain' }}
                                             />
-                                            <div className="mt-4 flex gap-2">
+                                            <div className="p-4 flex gap-2">
                                                 <button
                                                     onClick={capturePhoto}
-                                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
                                                 >
-                                                    📷 Capturar
+                                                    📷 Capturar Foto
                                                 </button>
                                                 <button
                                                     onClick={stopCamera}
-                                                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg"
+                                                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
                                                 >
                                                     ❌ Cancelar
                                                 </button>
                                             </div>
                                         </div>
                                     ) : preview ? (
-                                        <div className="w-full">
+                                        <div className="w-full p-4 flex flex-col items-center">
                                             <img
                                                 src={preview}
                                                 alt="Preview"
-                                                className="max-h-64 mx-auto rounded-lg"
+                                                className="max-h-80 rounded-lg"
                                             />
                                             <button
                                                 onClick={() => { setPreview(null); setSelectedFile(null); setOcrData(null); }}
-                                                className="mt-4 text-red-600 hover:text-red-700 text-sm"
+                                                className="mt-4 text-red-600 hover:text-red-700 text-sm font-medium"
                                             >
-                                                🗑️ Eliminar
+                                                🗑️ Eliminar y tomar otra foto
                                             </button>
                                         </div>
                                     ) : (
-                                        <div>
-                                            <div className="text-6xl mb-4">📄</div>
-                                            <p className="text-gray-600">
-                                                Toma una foto o sube una imagen
-                                            </p>
+                                        <div className="h-full flex items-center justify-center py-16">
+                                            <div className="text-center">
+                                                <div className="text-6xl mb-4">📄</div>
+                                                <p className="text-gray-600 text-lg">
+                                                    Toma una foto o sube una imagen
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
