@@ -30,11 +30,11 @@ export default function ChecklistPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data: checklistData, isLoading } = useQuery({
-        queryKey: ['checklist', selectedMonth, selectedYear],
+    const { data: checklistData, isLoading, refetch } = useQuery({
+        queryKey: ['checklist'],
         queryFn: async () => {
             const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/checklist?month=${selectedMonth}&year=${selectedYear}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/checklist`,
                 {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -69,7 +69,7 @@ export default function ChecklistPage() {
             return response.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['checklist'] });
+            refetch();
         },
     });
 
@@ -90,7 +90,7 @@ export default function ChecklistPage() {
             return response.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['checklist'] });
+            refetch();
             setShowAddForm(false);
             setNewItem({ name: '', amount: '', dueDay: '1', categoryId: '' });
             alert('✅ Item guardado exitosamente!');
@@ -116,7 +116,7 @@ export default function ChecklistPage() {
         );
     }
 
-    const items = checklistData?.items || [];
+    const items = Array.isArray(checklistData) ? checklistData : [];
     const completedCount = items.filter((item: any) => item.isCompleted).length;
     const totalAmount = items.reduce((sum: number, item: any) => sum + parseFloat(item.amount), 0);
     const completedAmount = items
