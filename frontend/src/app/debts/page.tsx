@@ -337,62 +337,132 @@ export default function DebtsPage() {
                                         </div>
                                     </div>
                                     <div className="space-y-3">
-                                        {group.debts.map((debt: any) => (
-                                            <div key={debt.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex-1">
-                                                        {debt.description && (
-                                                            <p className="text-sm font-semibold text-gray-900">{debt.description}</p>
+                                        {/* Sección de Deudas */}
+                                        {group.debts.length > 0 && (
+                                            <div className="space-y-3">
+                                                <h4 className="text-sm font-semibold text-red-700 uppercase tracking-wide">
+                                                    💳 Deudas ({group.debts.length})
+                                                </h4>
+                                                {group.debts.map((debt: any) => (
+                                                    <div key={debt.id} className="bg-white border border-red-200 rounded-lg p-4">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="flex-1">
+                                                                {debt.description && (
+                                                                    <p className="text-sm font-semibold text-gray-900">{debt.description}</p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => setEditingDebt({
+                                                                        ...debt,
+                                                                        totalAmount: debt.totalAmount.toString()
+                                                                    })}
+                                                                    className="text-blue-600 hover:bg-blue-50 p-2 rounded"
+                                                                    title="Editar"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm('¿Eliminar esta deuda?')) {
+                                                                            deleteMutation.mutate(debt.id);
+                                                                        }
+                                                                    }}
+                                                                    className="text-red-600 hover:bg-red-50 p-2 rounded"
+                                                                    title="Eliminar"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                                            <div>
+                                                                <p className="text-gray-600">Total</p>
+                                                                <p className="font-semibold">{formatCOP(parseFloat(debt.totalAmount))}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-gray-600">Pagado</p>
+                                                                <p className="font-semibold text-green-600">{formatCOP(parseFloat(debt.paidAmount))}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-gray-600">Pendiente</p>
+                                                                <p className="font-bold text-red-600">{formatCOP(debt.pendingAmount)}</p>
+                                                            </div>
+                                                        </div>
+                                                        {debt.pendingAmount > 0 && (
+                                                            <button
+                                                                onClick={() => handlePayment(debt)}
+                                                                className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg"
+                                                            >
+                                                                💰 Registrar Pago
+                                                            </button>
                                                         )}
                                                     </div>
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => setEditingDebt({
-                                                                ...debt,
-                                                                totalAmount: debt.totalAmount.toString()
-                                                            })}
-                                                            className="text-blue-600 hover:bg-blue-50 p-2 rounded"
-                                                            title="Editar"
-                                                        >
-                                                            ✏️
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (confirm('¿Eliminar esta deuda?')) {
-                                                                    deleteMutation.mutate(debt.id);
-                                                                }
-                                                            }}
-                                                            className="text-red-600 hover:bg-red-50 p-2 rounded"
-                                                            title="Eliminar"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                                                    <div>
-                                                        <p className="text-gray-600">Total</p>
-                                                        <p className="font-semibold">{formatCOP(parseFloat(debt.totalAmount))}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-600">Pagado</p>
-                                                        <p className="font-semibold text-green-600">{formatCOP(parseFloat(debt.paidAmount))}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-gray-600">Pendiente</p>
-                                                        <p className="font-bold text-red-600">{formatCOP(debt.pendingAmount)}</p>
-                                                    </div>
-                                                </div>
-                                                {debt.pendingAmount > 0 && (
-                                                    <button
-                                                        onClick={() => handlePayment(debt)}
-                                                        className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg"
-                                                    >
-                                                        💰 Registrar Pago
-                                                    </button>
-                                                )}
+                                                ))}
                                             </div>
-                                        ))}
+                                        )}
+
+                                        {/* Sección de Abonos */}
+                                        {group.abonos.length > 0 && (
+                                            <div className="space-y-3 mt-4">
+                                                <h4 className="text-sm font-semibold text-green-700 uppercase tracking-wide">
+                                                    💚 Abonos a tu favor ({group.abonos.length})
+                                                </h4>
+                                                {group.abonos.map((abono: any) => (
+                                                    <div key={abono.id} className="bg-white border-2 border-green-300 rounded-lg p-4 shadow-sm">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="flex-1">
+                                                                {abono.description && (
+                                                                    <p className="text-sm font-semibold text-gray-900">{abono.description}</p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() => setEditingDebt({
+                                                                        ...abono,
+                                                                        totalAmount: abono.totalAmount.toString()
+                                                                    })}
+                                                                    className="text-blue-600 hover:bg-blue-50 p-2 rounded"
+                                                                    title="Editar"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm('¿Eliminar este abono?')) {
+                                                                            deleteMutation.mutate(abono.id);
+                                                                        }
+                                                                    }}
+                                                                    className="text-red-600 hover:bg-red-50 p-2 rounded"
+                                                                    title="Eliminar"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                                            <div>
+                                                                <p className="text-gray-600">Total Original</p>
+                                                                <p className="font-semibold">{formatCOP(parseFloat(abono.totalAmount))}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-gray-600">Pagado</p>
+                                                                <p className="font-semibold text-green-600">{formatCOP(parseFloat(abono.paidAmount))}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-gray-600">A tu favor</p>
+                                                                <p className="font-bold text-green-600">{formatCOP(Math.abs(abono.pendingAmount))}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-3 bg-green-50 border border-green-200 rounded p-2 text-center">
+                                                            <p className="text-xs text-green-700">
+                                                                ✅ Este acreedor te debe este monto
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
