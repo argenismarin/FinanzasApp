@@ -26,6 +26,20 @@ export default function DashboardPage() {
         enabled: isAuthenticated,
     });
 
+    const { data: balance, isLoading: balanceLoading } = useQuery({
+        queryKey: ['balance'],
+        queryFn: async () => {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/balance`, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+            });
+            if (!response.ok) throw new Error('Failed to fetch balance');
+            return response.json();
+        },
+        enabled: isAuthenticated,
+    });
+
     const { data: recentTransactions, isLoading: transactionsLoading } = useQuery({
         queryKey: ['recent-transactions'],
         queryFn: () => api.getTransactions({ limit: 5 }),
@@ -72,6 +86,92 @@ export default function DashboardPage() {
 
             {/* Main Content */}
             <main className="container mx-auto px-4 py-8">
+                {/* Balance Overview */}
+                <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-900">📊 Balance General</h2>
+                        <Link
+                            href="/balance"
+                            className="text-sm text-blue-600 hover:text-blue-700 underline"
+                        >
+                            Ver detalle →
+                        </Link>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="bg-blue-50 rounded-lg p-4">
+                            <div className="text-2xl mb-2">💰</div>
+                            <p className="text-sm text-gray-600 mb-1">En Banco</p>
+                            <p className={`text-xl font-bold ${(balance?.bankBalance || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                {balanceLoading ? '...' : formatCOP(balance?.bankBalance || 0)}
+                            </p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-4">
+                            <div className="text-2xl mb-2">🏦</div>
+                            <p className="text-sm text-gray-600 mb-1">Ahorros</p>
+                            <p className="text-xl font-bold text-green-600">
+                                {balanceLoading ? '...' : formatCOP(balance?.totalSavings || 0)}
+                            </p>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-4">
+                            <div className="text-2xl mb-2">💳</div>
+                            <p className="text-sm text-gray-600 mb-1">Deudas</p>
+                            <p className="text-xl font-bold text-red-600">
+                                {balanceLoading ? '...' : formatCOP(balance?.totalDebts || 0)}
+                            </p>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-4">
+                            <div className="text-2xl mb-2">📈</div>
+                            <p className="text-sm text-gray-600 mb-1">Patrimonio Neto</p>
+                            <p className={`text-xl font-bold ${(balance?.netWorth || 0) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                                {balanceLoading ? '...' : formatCOP(balance?.netWorth || 0)}
+                            </p>
+                        </div>
+                        <div className="bg-teal-50 rounded-lg p-4">
+                            <div className="text-2xl mb-2">💸</div>
+                            <p className="text-sm text-gray-600 mb-1">Disponible</p>
+                            <p className={`text-xl font-bold ${(balance?.availableToSpend || 0) >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
+                                {balanceLoading ? '...' : formatCOP(balance?.availableToSpend || 0)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <Link
+                        href="/transactions"
+                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
+                    >
+                        <div className="text-3xl mb-2">💰</div>
+                        <p className="font-semibold text-gray-900">Transacciones</p>
+                        <p className="text-xs text-gray-500 mt-1">Ingresos y gastos</p>
+                    </Link>
+                    <Link
+                        href="/debts"
+                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
+                    >
+                        <div className="text-3xl mb-2">💳</div>
+                        <p className="font-semibold text-gray-900">Deudas</p>
+                        <p className="text-xs text-gray-500 mt-1">{balance?.breakdown?.debtsCount || 0} pendientes</p>
+                    </Link>
+                    <Link
+                        href="/savings"
+                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
+                    >
+                        <div className="text-3xl mb-2">🏦</div>
+                        <p className="font-semibold text-gray-900">Ahorros</p>
+                        <p className="text-xs text-gray-500 mt-1">{balance?.breakdown?.savingsCount || 0} cajitas</p>
+                    </Link>
+                    <Link
+                        href="/checklist"
+                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
+                    >
+                        <div className="text-3xl mb-2">✅</div>
+                        <p className="font-semibold text-gray-900">Checklist</p>
+                        <p className="text-xs text-gray-500 mt-1">Gastos mensuales</p>
+                    </Link>
+                </div>
+
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <StatCard
