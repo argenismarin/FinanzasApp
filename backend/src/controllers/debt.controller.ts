@@ -22,10 +22,27 @@ export const getDebts = async (req: AuthRequest, res: Response) => {
         });
 
         // Calculate pending amount for each debt
-        const debtsWithPending = debts.map(debt => ({
-            ...debt,
-            pendingAmount: Number(debt.totalAmount) - Number(debt.paidAmount)
-        }));
+        const debtsWithPending = debts.map(debt => {
+            const total = Number(debt.totalAmount);
+            const paid = Number(debt.paidAmount);
+
+            // If total is negative, it's a credit (they owe you)
+            // Show as positive credit instead of negative debt
+            if (total < 0) {
+                return {
+                    ...debt,
+                    isCredit: true,
+                    creditAmount: Math.abs(total - paid), // Positive amount they owe you
+                    pendingAmount: 0 // Don't show as pending debt
+                };
+            }
+
+            return {
+                ...debt,
+                isCredit: false,
+                pendingAmount: total - paid
+            };
+        });
 
         res.json(debtsWithPending);
     } catch (error) {
