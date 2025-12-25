@@ -73,6 +73,15 @@ app.get('/api', (req: Request, res: Response) => {
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Health check endpoint
+app.get('/health', (req: Request, res: Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/health', (req: Request, res: Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
