@@ -26,7 +26,14 @@ export const getChecklistItems = async (req: AuthRequest, res: Response) => {
         const monthDate = new Date(selectedYear, selectedMonth - 1, 1);
 
         const items = await prisma.checklistItem.findMany({
-            where: { userId, isActive: true },
+            where: {
+                userId,
+                isActive: true,
+                // Only show items created on or before the selected month
+                createdAt: {
+                    lte: new Date(selectedYear, selectedMonth, 0, 23, 59, 59) // Last day of selected month
+                }
+            },
             include: {
                 category: true,
                 completions: {
