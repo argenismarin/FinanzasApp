@@ -13,8 +13,7 @@ export default function DebtsPage() {
     const [newDebt, setNewDebt] = useState({
         creditor: '',
         totalAmount: '',
-        description: '',
-        dueDate: '',
+        description: ''
     });
 
     useEffect(() => {
@@ -56,7 +55,7 @@ export default function DebtsPage() {
         onSuccess: () => {
             refetch();
             setShowAddForm(false);
-            setNewDebt({ creditor: '', totalAmount: '', description: '', dueDate: '' });
+            setNewDebt({ creditor: '', totalAmount: '', description: '' });
             alert('💳 Deuda registrada exitosamente!');
         },
     });
@@ -233,13 +232,6 @@ export default function DebtsPage() {
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                                 rows={2}
                             />
-                            <input
-                                type="date"
-                                placeholder="Fecha límite (opcional)"
-                                value={newDebt.dueDate}
-                                onChange={(e) => setNewDebt({ ...newDebt, dueDate: e.target.value })}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                            />
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => createMutation.mutate(newDebt)}
@@ -285,12 +277,6 @@ export default function DebtsPage() {
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                                 rows={2}
                             />
-                            <input
-                                type="date"
-                                value={editingDebt.dueDate ? new Date(editingDebt.dueDate).toISOString().split('T')[0] : ''}
-                                onChange={(e) => setEditingDebt({ ...editingDebt, dueDate: e.target.value })}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                            />
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => updateMutation.mutate({
@@ -298,8 +284,7 @@ export default function DebtsPage() {
                                         data: {
                                             creditor: editingDebt.creditor,
                                             totalAmount: parseFloat(editingDebt.totalAmount),
-                                            description: editingDebt.description,
-                                            dueDate: editingDebt.dueDate
+                                            description: editingDebt.description
                                         }
                                     })}
                                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
@@ -373,7 +358,7 @@ export default function DebtsPage() {
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                                                     <div>
                                                         <p className="text-gray-600">Total</p>
                                                         <p className="font-semibold">{formatCOP(parseFloat(debt.totalAmount))}</p>
@@ -385,14 +370,6 @@ export default function DebtsPage() {
                                                     <div>
                                                         <p className="text-gray-600">Pendiente</p>
                                                         <p className="font-bold text-red-600">{formatCOP(debt.pendingAmount)}</p>
-                                                    </div>
-                                                    <div>
-                                                        {debt.dueDate && (
-                                                            <>
-                                                                <p className="text-gray-600">Vence</p>
-                                                                <p className="font-semibold">{new Date(debt.dueDate).toLocaleDateString('es-CO')}</p>
-                                                            </>
-                                                        )}
                                                     </div>
                                                 </div>
                                                 {debt.pendingAmount > 0 && (

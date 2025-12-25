@@ -45,9 +45,19 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
             where: { userId }
         });
 
-        const totalDebts = debts.reduce((sum, debt) => {
-            const pending = Number(debt.totalAmount) - Number(debt.paidAmount);
-            return sum + pending;
+        // Calculate pending for each debt
+        const debtsWithPending = debts.map(debt => ({
+            ...debt,
+            pendingAmount: Number(debt.totalAmount) - Number(debt.paidAmount)
+        }));
+
+        // Only count POSITIVE pending amounts as debts
+        // Negative amounts are abonos/payments, not debts
+        const totalDebts = debtsWithPending.reduce((sum, debt) => {
+            if (debt.pendingAmount > 0) {
+                return sum + debt.pendingAmount;
+            }
+            return sum;
         }, 0);
 
         // Calculate metrics
