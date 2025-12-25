@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
@@ -10,6 +11,7 @@ import Link from 'next/link';
 
 export default function DashboardPage() {
     const { user, loading: authLoading, isAuthenticated } = useAuth();
+    const { theme, toggleTheme } = useTheme();
     const router = useRouter();
 
     useEffect(() => {
@@ -48,6 +50,13 @@ export default function DashboardPage() {
                 <div className="container mx-auto px-4 py-4 flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-gray-900">💰 FinanzasApp</h1>
                     <div className="flex items-center gap-4">
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2 rounded-lg hover:bg-gray-100 transition"
+                            title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+                        >
+                            <span className="text-2xl">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                        </button>
                         <span className="text-sm text-gray-600">
                             Hola, <span className="font-semibold">{user?.name}</span>
                         </span>
