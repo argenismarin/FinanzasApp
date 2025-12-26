@@ -48,7 +48,7 @@ const limiter = rateLimit({
         res.status(429).json({
             error: 'Demasiadas solicitudes',
             message: 'Has excedido el límite de solicitudes. Por favor, intenta de nuevo más tarde.',
-            retryAfter: Math.ceil((req.rateLimit?.resetTime?.getTime() - Date.now()) / 1000) || 900
+            retryAfter: 900
         });
     }
 });

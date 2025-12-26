@@ -86,8 +86,6 @@ export class NotificationService {
                     where: {
                         userId,
                         type: 'BUDGET_ALERT',
-                        message: { contains: 'superado' },
-                        message: { contains: budget.category.name },
                         createdAt: { gte: monthStart }
                     }
                 });
@@ -232,8 +230,7 @@ export class NotificationService {
                     where: {
                         userId,
                         type: 'GOAL_COMPLETED',
-                        message: { contains: '75%' },
-                        message: { contains: goal.name }
+                        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
                     }
                 });
 

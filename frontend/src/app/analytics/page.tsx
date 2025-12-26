@@ -263,7 +263,9 @@ export default function AnalyticsPage() {
                                 </ResponsiveContainer>
                                 <div className="mt-4">
                                     <p className="text-center text-2xl font-bold text-gray-900">
-                                        Total: {formatCOP(categoryData?.total || 0)}
+                                        Total: {formatCOP(
+                                            pieChartData.reduce((sum, item) => sum + (item.value || 0), 0)
+                                        )}
                                     </p>
                                 </div>
                             </>
