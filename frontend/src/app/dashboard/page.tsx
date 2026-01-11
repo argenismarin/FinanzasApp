@@ -101,38 +101,40 @@ export default function DashboardPage() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-            {/* Header */}
+            {/* Header - Mobile Responsive */}
             <header className="bg-white shadow-sm">
-                <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-                    <h1 className="text-2xl font-bold text-gray-900">💰 FinanzasApp</h1>
-                    <div className="flex items-center gap-4">
-                        <NotificationCenter />
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2 rounded-lg hover:bg-gray-100 transition"
-                            title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
-                        >
-                            <span className="text-2xl">{theme === 'dark' ? '☀️' : '🌙'}</span>
-                        </button>
-                        <span className="text-sm text-gray-600">
-                            Hola, <span className="font-semibold">{user?.name}</span>
-                        </span>
-                        <Link
-                            href="/transactions"
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                        >
-                            Ver Transacciones
-                        </Link>
+                <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">💰 FinanzasApp</h1>
+                        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+                            <NotificationCenter />
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2 rounded-lg hover:bg-gray-100 transition"
+                                title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+                            >
+                                <span className="text-xl sm:text-2xl">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                            </button>
+                            <span className="text-xs sm:text-sm text-gray-600 hidden sm:inline">
+                                Hola, <span className="font-semibold">{user?.name}</span>
+                            </span>
+                            <Link
+                                href="/transactions"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition"
+                            >
+                                Transacciones
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="container mx-auto px-4 py-8">
+            <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
                 {/* Balance Overview */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-gray-900">📊 Balance General</h2>
+                <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 mb-6 sm:mb-8">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 sm:mb-6">
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">📊 Balance General</h2>
                         <Link
                             href="/balance"
                             className="text-sm text-blue-600 hover:text-blue-700 underline"
@@ -140,7 +142,7 @@ export default function DashboardPage() {
                             Ver detalle →
                         </Link>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
                         <div className="bg-blue-50 rounded-lg p-4">
                             <div className="text-2xl mb-2">💰</div>
                             <p className="text-sm text-gray-600 mb-1">En Banco</p>
@@ -254,7 +256,7 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                         {/* Top Categories */}
                         <TopCategoriesWidget categories={dashboardStats.topCategories} />
-                        
+
                         {/* Upcoming Reminders or Goals Progress */}
                         {dashboardStats.upcomingReminders && dashboardStats.upcomingReminders.length > 0 ? (
                             <UpcomingRemindersWidget reminders={dashboardStats.upcomingReminders} />
