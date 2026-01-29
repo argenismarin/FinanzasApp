@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCOP } from '@/lib/utils';
+import { formatCOP, parseDate } from '@/lib/utils';
 import Link from 'next/link';
 import {
     ComparisonWidget,
@@ -14,7 +14,8 @@ import {
     BudgetAlertsWidget,
     UpcomingRemindersWidget,
     GoalsProgressWidget,
-    TrendWidget
+    TrendWidget,
+    ChecklistProgressWidget
 } from '@/components/DashboardWidgets';
 import NotificationCenter from '@/components/NotificationCenter';
 
@@ -90,136 +91,118 @@ export default function DashboardPage() {
 
     if (authLoading || !isAuthenticated) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Cargando...</p>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400">Cargando...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-            {/* Header - Mobile Responsive */}
-            <header className="bg-white shadow-sm">
-                <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">💰 FinanzasApp</h1>
-                        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-                            <NotificationCenter />
-                            <button
-                                onClick={toggleTheme}
-                                className="p-2 rounded-lg hover:bg-gray-100 transition"
-                                title={theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
-                            >
-                                <span className="text-xl sm:text-2xl">{theme === 'dark' ? '☀️' : '🌙'}</span>
-                            </button>
-                            <span className="text-xs sm:text-sm text-gray-600 hidden sm:inline">
-                                Hola, <span className="font-semibold">{user?.name}</span>
-                            </span>
-                            <Link
-                                href="/transactions"
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition"
-                            >
-                                Transacciones
-                            </Link>
-                        </div>
-                    </div>
+        <div className="max-w-7xl mx-auto">
+            {/* Welcome Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                <div>
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+                        Hola, {user?.name} 👋
+                    </h1>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Bienvenido a tu panel de finanzas
+                    </p>
                 </div>
-            </header>
-
-            {/* Main Content */}
-            <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
-                {/* Balance Overview */}
-                <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 mb-6 sm:mb-8">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 sm:mb-6">
-                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">📊 Balance General</h2>
-                        <Link
-                            href="/balance"
-                            className="text-sm text-blue-600 hover:text-blue-700 underline"
-                        >
-                            Ver detalle →
-                        </Link>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                        <div className="bg-blue-50 rounded-lg p-4">
-                            <div className="text-2xl mb-2">💰</div>
-                            <p className="text-sm text-gray-600 mb-1">En Banco</p>
-                            <p className={`text-xl font-bold ${(balance?.bankBalance || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                                {balanceLoading ? '...' : formatCOP(balance?.bankBalance || 0)}
-                            </p>
-                        </div>
-                        <div className="bg-green-50 rounded-lg p-4">
-                            <div className="text-2xl mb-2">🏦</div>
-                            <p className="text-sm text-gray-600 mb-1">Ahorros</p>
-                            <p className="text-xl font-bold text-green-600">
-                                {balanceLoading ? '...' : formatCOP(balance?.totalSavings || 0)}
-                            </p>
-                        </div>
-                        <div className="bg-red-50 rounded-lg p-4">
-                            <div className="text-2xl mb-2">💳</div>
-                            <p className="text-sm text-gray-600 mb-1">Deudas</p>
-                            <p className="text-xl font-bold text-red-600">
-                                {balanceLoading ? '...' : formatCOP(balance?.totalDebts || 0)}
-                            </p>
-                        </div>
-                        <div className="bg-purple-50 rounded-lg p-4">
-                            <div className="text-2xl mb-2">📈</div>
-                            <p className="text-sm text-gray-600 mb-1">Patrimonio Neto</p>
-                            <p className={`text-xl font-bold ${(balance?.netWorth || 0) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
-                                {balanceLoading ? '...' : formatCOP(balance?.netWorth || 0)}
-                            </p>
-                        </div>
-                        <div className="bg-teal-50 rounded-lg p-4">
-                            <div className="text-2xl mb-2">💸</div>
-                            <p className="text-sm text-gray-600 mb-1">Disponible</p>
-                            <p className={`text-xl font-bold ${(balance?.availableToSpend || 0) >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
-                                {balanceLoading ? '...' : formatCOP(balance?.availableToSpend || 0)}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <NotificationCenter />
+            </div>
+            {/* Balance Overview */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6 mb-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">📊 Balance General</h2>
                     <Link
-                        href="/transactions"
-                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
+                        href="/balance"
+                        className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                     >
-                        <div className="text-3xl mb-2">💰</div>
-                        <p className="font-semibold text-gray-900">Transacciones</p>
-                        <p className="text-xs text-gray-500 mt-1">Ingresos y gastos</p>
-                    </Link>
-                    <Link
-                        href="/debts"
-                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
-                    >
-                        <div className="text-3xl mb-2">💳</div>
-                        <p className="font-semibold text-gray-900">Deudas</p>
-                        <p className="text-xs text-gray-500 mt-1">{balance?.breakdown?.debtsCount || 0} pendientes</p>
-                    </Link>
-                    <Link
-                        href="/savings"
-                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
-                    >
-                        <div className="text-3xl mb-2">🏦</div>
-                        <p className="font-semibold text-gray-900">Ahorros</p>
-                        <p className="text-xs text-gray-500 mt-1">{balance?.breakdown?.savingsCount || 0} cajitas</p>
-                    </Link>
-                    <Link
-                        href="/checklist"
-                        className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition text-center"
-                    >
-                        <div className="text-3xl mb-2">✅</div>
-                        <p className="font-semibold text-gray-900">Checklist</p>
-                        <p className="text-xs text-gray-500 mt-1">Gastos mensuales</p>
+                        Ver detalle →
                     </Link>
                 </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+                    <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 sm:p-4">
+                        <div className="text-lg sm:text-2xl mb-1 sm:mb-2">💰</div>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">En Banco</p>
+                        <p className={`text-base sm:text-lg md:text-xl font-bold ${(balance?.bankBalance || 0) >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {balanceLoading ? '...' : formatCOP(balance?.bankBalance || 0)}
+                        </p>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3 sm:p-4">
+                        <div className="text-lg sm:text-2xl mb-1 sm:mb-2">🏦</div>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Ahorros</p>
+                        <p className="text-base sm:text-lg md:text-xl font-bold text-green-600 dark:text-green-400">
+                            {balanceLoading ? '...' : formatCOP(balance?.totalSavings || 0)}
+                        </p>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/30 rounded-lg p-3 sm:p-4">
+                        <div className="text-lg sm:text-2xl mb-1 sm:mb-2">💳</div>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Deudas</p>
+                        <p className="text-base sm:text-lg md:text-xl font-bold text-red-600 dark:text-red-400">
+                            {balanceLoading ? '...' : formatCOP(balance?.totalDebts || 0)}
+                        </p>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3 sm:p-4">
+                        <div className="text-lg sm:text-2xl mb-1 sm:mb-2">📈</div>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Patrimonio</p>
+                        <p className={`text-base sm:text-lg md:text-xl font-bold ${(balance?.netWorth || 0) >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {balanceLoading ? '...' : formatCOP(balance?.netWorth || 0)}
+                        </p>
+                    </div>
+                    <div className="bg-teal-50 dark:bg-teal-900/30 rounded-lg p-3 sm:p-4">
+                        <div className="text-lg sm:text-2xl mb-1 sm:mb-2">💸</div>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Disponible</p>
+                        <p className={`text-base sm:text-lg md:text-xl font-bold ${(balance?.availableToSpend || 0) >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {balanceLoading ? '...' : formatCOP(balance?.availableToSpend || 0)}
+                        </p>
+                    </div>
+                </div>
+            </div>
 
-                {/* Comparison Cards - Current vs Previous Month */}
-                {!dashboardLoading && dashboardStats && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {/* Quick Actions */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                <Link
+                    href="/transactions"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 sm:p-4 hover:shadow-lg transition text-center"
+                >
+                    <div className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">💰</div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm">Transacciones</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">Ingresos y gastos</p>
+                </Link>
+                <Link
+                    href="/debts"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 sm:p-4 hover:shadow-lg transition text-center"
+                >
+                    <div className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">💳</div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm">Deudas</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">{balance?.breakdown?.debtsCount || 0} pendientes</p>
+                </Link>
+                <Link
+                    href="/savings"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 sm:p-4 hover:shadow-lg transition text-center"
+                >
+                    <div className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">🏦</div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm">Ahorros</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">{balance?.breakdown?.savingsCount || 0} cajitas</p>
+                </Link>
+                <Link
+                    href="/checklist"
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 sm:p-4 hover:shadow-lg transition text-center"
+                >
+                    <div className="text-xl sm:text-2xl md:text-3xl mb-1 sm:mb-2">✅</div>
+                    <p className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm">Checklist</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1">Gastos mensuales</p>
+                </Link>
+            </div>
+
+            {/* Comparison Cards - Current vs Previous Month */}
+            {!dashboardLoading && dashboardStats && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-6">
                         <ComparisonWidget
                             title="Ingresos del Mes"
                             current={dashboardStats.currentMonth.income}
@@ -242,208 +225,107 @@ export default function DashboardPage() {
                             type="balance"
                         />
                     </div>
-                )}
+            )}
 
-                {/* Budget Alerts - Full Width if exists */}
-                {!dashboardLoading && dashboardStats?.budgetAlerts && dashboardStats.budgetAlerts.length > 0 && (
-                    <div className="mb-8">
-                        <BudgetAlertsWidget alerts={dashboardStats.budgetAlerts} />
-                    </div>
-                )}
+            {/* Budget Alerts - Full Width if exists */}
+            {!dashboardLoading && dashboardStats?.budgetAlerts && dashboardStats.budgetAlerts.length > 0 && (
+                <div className="mb-6">
+                    <BudgetAlertsWidget alerts={dashboardStats.budgetAlerts} />
+                </div>
+            )}
 
-                {/* Insights Grid */}
-                {!dashboardLoading && dashboardStats && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        {/* Top Categories */}
-                        <TopCategoriesWidget categories={dashboardStats.topCategories} />
+            {/* Checklist Progress */}
+            {!dashboardLoading && dashboardStats?.checklistProgress && dashboardStats.checklistProgress.total > 0 && (
+                <div className="mb-6">
+                    <ChecklistProgressWidget checklistProgress={dashboardStats.checklistProgress} />
+                </div>
+            )}
 
-                        {/* Upcoming Reminders or Goals Progress */}
-                        {dashboardStats.upcomingReminders && dashboardStats.upcomingReminders.length > 0 ? (
-                            <UpcomingRemindersWidget reminders={dashboardStats.upcomingReminders} />
-                        ) : dashboardStats.goalsProgress && dashboardStats.goalsProgress.length > 0 ? (
-                            <GoalsProgressWidget goals={dashboardStats.goalsProgress} />
-                        ) : null}
-                    </div>
-                )}
+            {/* Insights Grid */}
+            {!dashboardLoading && dashboardStats && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
+                    {/* Top Categories */}
+                    <TopCategoriesWidget categories={dashboardStats.topCategories} />
 
-                {/* 6 Month Trend */}
-                {!dashboardLoading && dashboardStats?.trend && (
-                    <div className="mb-8">
-                        <TrendWidget trend={dashboardStats.trend} />
-                    </div>
-                )}
+                    {/* Upcoming Reminders or Goals Progress */}
+                    {dashboardStats.upcomingReminders && dashboardStats.upcomingReminders.length > 0 ? (
+                        <UpcomingRemindersWidget reminders={dashboardStats.upcomingReminders} />
+                    ) : dashboardStats.goalsProgress && dashboardStats.goalsProgress.length > 0 ? (
+                        <GoalsProgressWidget goals={dashboardStats.goalsProgress} />
+                    ) : null}
+                </div>
+            )}
 
-                {/* Recent Transactions */}
-                <div className="bg-white rounded-2xl shadow-xl p-6">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-gray-900">
-                            Transacciones Recientes
-                        </h2>
-                        <Link
-                            href="/transactions"
-                            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                        >
-                            Ver todas →
-                        </Link>
-                    </div>
+            {/* 6 Month Trend */}
+            {!dashboardLoading && dashboardStats?.trend && (
+                <div className="mb-6">
+                    <TrendWidget trend={dashboardStats.trend} />
+                </div>
+            )}
 
-                    {transactionsLoading ? (
-                        <div className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                        </div>
-                    ) : recentTransactions?.data?.length > 0 ? (
-                        <div className="space-y-4">
-                            {recentTransactions.data.map((transaction: any) => (
-                                <TransactionItem key={transaction.id} transaction={transaction} />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-500">
-                            <p className="text-lg mb-2">📝 No hay transacciones aún</p>
-                            <p className="text-sm">Comienza agregando tu primera transacción</p>
-                        </div>
-                    )}
+            {/* Recent Transactions */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
+                <div className="flex justify-between items-center mb-4 sm:mb-6">
+                    <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 dark:text-white">
+                        Transacciones Recientes
+                    </h2>
+                    <Link
+                        href="/transactions"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs sm:text-sm font-medium"
+                    >
+                        Ver todas →
+                    </Link>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Link
-                        href="/transactions/new"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-blue-100 rounded-full p-4">
-                                <span className="text-3xl">➕</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Nueva Transacción</h3>
-                                <p className="text-sm text-gray-600">Registra un ingreso o gasto</p>
-                            </div>
-                        </div>
-                    </Link>
+                {transactionsLoading ? (
+                    <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    </div>
+                ) : recentTransactions?.data?.length > 0 ? (
+                    <div className="space-y-2 sm:space-y-4">
+                        {recentTransactions.data.map((transaction: any) => (
+                            <TransactionItem key={transaction.id} transaction={transaction} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <p className="text-base sm:text-lg mb-2">📝 No hay transacciones aun</p>
+                        <p className="text-xs sm:text-sm">Comienza agregando tu primera transaccion</p>
+                    </div>
+                )}
+            </div>
 
-                    <Link
-                        href="/budgets"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-green-100 rounded-full p-4">
-                                <span className="text-3xl">📊</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Presupuestos</h3>
-                                <p className="text-sm text-gray-600">Control de gastos</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/goals"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-purple-100 rounded-full p-4">
-                                <span className="text-3xl">🎯</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Metas de Ahorro</h3>
-                                <p className="text-sm text-gray-600">Alcanza tus objetivos</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/reminders"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-yellow-100 rounded-full p-4">
-                                <span className="text-3xl">🔔</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Recordatorios</h3>
-                                <p className="text-sm text-gray-600">Pagos pendientes</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/receipts"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-indigo-100 rounded-full p-4">
-                                <span className="text-3xl">📸</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Escanear Factura</h3>
-                                <p className="text-sm text-gray-600">OCR con IA</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/checklist"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-pink-100 rounded-full p-4">
-                                <span className="text-3xl">✅</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Checklist Mensual</h3>
-                                <p className="text-sm text-gray-600">Gastos recurrentes</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/analytics"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-cyan-100 rounded-full p-4">
-                                <span className="text-3xl">📈</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Analítica</h3>
-                                <p className="text-sm text-gray-600">Gráficos y reportes</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/accounts"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-teal-100 rounded-full p-4">
-                                <span className="text-3xl">💳</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Cuentas Bancarias</h3>
-                                <p className="text-sm text-gray-600">Gestiona tus cuentas</p>
-                            </div>
-                        </div>
-                    </Link>
-
-                    <Link
-                        href="/calculators"
-                        className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-purple-100 rounded-full p-4">
-                                <span className="text-3xl">🧮</span>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-gray-900">Calculadoras</h3>
-                                <p className="text-sm text-gray-600">Herramientas financieras</p>
-                            </div>
-                        </div>
-                    </Link>
-                </div>
-            </main>
+            {/* Quick Actions Grid */}
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                <QuickActionCard href="/budgets" icon="📊" bg="bg-green-100 dark:bg-green-900/50" title="Presupuestos" desc="Control de gastos" />
+                <QuickActionCard href="/goals" icon="🎯" bg="bg-purple-100 dark:bg-purple-900/50" title="Metas" desc="Objetivos de ahorro" />
+                <QuickActionCard href="/receipts" icon="📸" bg="bg-indigo-100 dark:bg-indigo-900/50" title="Recibos" desc="OCR con IA" />
+                <QuickActionCard href="/analytics" icon="📈" bg="bg-cyan-100 dark:bg-cyan-900/50" title="Analitica" desc="Graficos y reportes" />
+                <QuickActionCard href="/accounts" icon="🏦" bg="bg-teal-100 dark:bg-teal-900/50" title="Cuentas" desc="Cuentas bancarias" />
+                <QuickActionCard href="/credit-cards" icon="💳" bg="bg-indigo-100 dark:bg-indigo-900/50" title="Tarjetas" desc="Tarjetas de credito" />
+                <QuickActionCard href="/reports" icon="📊" bg="bg-amber-100 dark:bg-amber-900/50" title="Reportes" desc="Analisis financiero" />
+                <QuickActionCard href="/calculators" icon="🧮" bg="bg-purple-100 dark:bg-purple-900/50" title="Calculadoras" desc="Herramientas" />
+            </div>
         </div>
+    );
+}
+
+function QuickActionCard({ href, icon, bg, title, desc }: { href: string; icon: string; bg: string; title: string; desc: string }) {
+    return (
+        <Link
+            href={href}
+            className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 hover:shadow-lg transition-shadow"
+        >
+            <div className="flex items-center gap-2 sm:gap-3">
+                <div className={`${bg} rounded-full p-2 sm:p-3`}>
+                    <span className="text-lg sm:text-2xl">{icon}</span>
+                </div>
+                <div className="min-w-0">
+                    <h3 className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm truncate">{title}</h3>
+                    <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 truncate">{desc}</p>
+                </div>
+            </div>
+        </Link>
     );
 }
 
@@ -451,20 +333,20 @@ function TransactionItem({ transaction }: { transaction: any }) {
     const isIncome = transaction.type === 'INCOME';
 
     return (
-        <div className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition">
-            <div className="flex items-center gap-4">
-                <div className="text-3xl">{transaction.category.icon}</div>
-                <div>
-                    <p className="font-medium text-gray-900">{transaction.description}</p>
-                    <p className="text-sm text-gray-500">{transaction.category.name}</p>
+        <div className="flex items-center justify-between p-2 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                <div className="text-lg sm:text-2xl md:text-3xl flex-shrink-0">{transaction.category.icon}</div>
+                <div className="min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm truncate">{transaction.description}</p>
+                    <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">{transaction.category.name}</p>
                 </div>
             </div>
-            <div className="text-right">
-                <p className={`font-semibold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="text-right flex-shrink-0 ml-2">
+                <p className={`font-semibold text-xs sm:text-base ${isIncome ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {isIncome ? '+' : '-'} {formatCOP(transaction.amount)}
                 </p>
-                <p className="text-sm text-gray-500">
-                    {new Date(transaction.date).toLocaleDateString('es-CO')}
+                <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">
+                    {parseDate(transaction.date).toLocaleDateString('es-CO')}
                 </p>
             </div>
         </div>
