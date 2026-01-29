@@ -7,8 +7,18 @@ export function formatCOP(amount: number): string {
     }).format(amount);
 }
 
+// Helper to parse date strings without timezone issues
+export function parseDate(date: string | Date): Date {
+    if (date instanceof Date) return date;
+    // If it's a date-only string (YYYY-MM-DD), add time to avoid timezone shift
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return new Date(date + 'T12:00:00');
+    }
+    return new Date(date);
+}
+
 export function formatDate(date: string | Date): string {
-    const d = typeof date === 'string' ? new Date(date) : date;
+    const d = parseDate(date);
     return new Intl.DateTimeFormat('es-CO', {
         year: 'numeric',
         month: 'long',
@@ -17,7 +27,7 @@ export function formatDate(date: string | Date): string {
 }
 
 export function formatShortDate(date: string | Date): string {
-    const d = typeof date === 'string' ? new Date(date) : date;
+    const d = parseDate(date);
     return new Intl.DateTimeFormat('es-CO', {
         year: 'numeric',
         month: '2-digit',
