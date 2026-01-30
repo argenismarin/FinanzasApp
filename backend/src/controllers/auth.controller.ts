@@ -3,12 +3,14 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import prisma from '../lib/prisma';
 
-// Validate JWT_SECRET is defined
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    console.error('CRITICAL: JWT_SECRET environment variable is not defined!');
-    process.exit(1);
-}
+// Get JWT_SECRET - will be validated at runtime
+const getJwtSecret = (): string => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('JWT_SECRET environment variable is not defined');
+    }
+    return secret;
+};
 
 const SALT_ROUNDS = 10;
 
@@ -68,7 +70,7 @@ export const login = async (req: Request, res: Response) => {
         // Generate JWT
         const token = jwt.sign(
             { userId: user.id },
-            JWT_SECRET,
+            getJwtSecret(),
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as any
         );
 
