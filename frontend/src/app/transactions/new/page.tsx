@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCOP } from '@/lib/utils';
+import { formatCOP, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
 import TagInput from '@/components/TagInput';
@@ -20,7 +20,7 @@ export default function NewTransactionPage() {
         amount: '',
         categoryId: '',
         description: '',
-        date: new Date().toISOString().split('T')[0],
+        date: getTodayString(),
         tags: [] as string[],
     });
 

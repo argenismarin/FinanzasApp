@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/Toast';
-import { formatCOP } from '@/lib/utils';
+import { formatCOP, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -117,13 +117,13 @@ export default function CreditCardsPage() {
         description: '',
         merchant: '',
         installments: '1',
-        transactionDate: new Date().toISOString().split('T')[0]
+        transactionDate: getTodayString()
     });
 
     const [newPayment, setNewPayment] = useState({
         amount: '',
         paymentType: 'PARTIAL',
-        paymentDate: new Date().toISOString().split('T')[0],
+        paymentDate: getTodayString(),
         description: ''
     });
 
@@ -207,7 +207,7 @@ export default function CreditCardsPage() {
             setSelectedCard(null);
             setNewTransaction({
                 amount: '', description: '', merchant: '', installments: '1',
-                transactionDate: new Date().toISOString().split('T')[0]
+                transactionDate: getTodayString()
             });
             showToast('Gasto registrado exitosamente', 'success');
         },
@@ -235,7 +235,7 @@ export default function CreditCardsPage() {
             setSelectedCard(null);
             setNewPayment({
                 amount: '', paymentType: 'PARTIAL',
-                paymentDate: new Date().toISOString().split('T')[0], description: ''
+                paymentDate: getTodayString(), description: ''
             });
             showToast('Pago registrado exitosamente', 'success');
         },

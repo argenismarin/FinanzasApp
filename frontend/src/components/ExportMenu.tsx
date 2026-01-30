@@ -4,6 +4,7 @@ import { useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/components/Toast';
+import { getTodayString } from '@/lib/utils';
 
 interface ExportMenuProps {
     type: 'transactions' | 'debts' | 'budgets' | 'monthly-report';
@@ -57,7 +58,7 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
             const downloadUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = `export_${type}_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `export_${type}_${getTodayString()}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

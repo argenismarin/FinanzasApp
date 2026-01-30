@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/Toast';
-import { formatCOP } from '@/lib/utils';
+import { formatCOP, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
 
@@ -69,7 +69,7 @@ export default function RecurringTransactionsPage() {
         frequency: 'MONTHLY',
         dayOfMonth: '1',
         dayOfWeek: '1',
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: getTodayString(),
         endDate: '',
         autoCreate: false
     });
@@ -207,7 +207,7 @@ export default function RecurringTransactionsPage() {
             frequency: 'MONTHLY',
             dayOfMonth: '1',
             dayOfWeek: '1',
-            startDate: new Date().toISOString().split('T')[0],
+            startDate: getTodayString(),
             endDate: '',
             autoCreate: false
         });

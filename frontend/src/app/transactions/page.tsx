@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCOP, parseDate } from '@/lib/utils';
+import { formatCOP, parseDate, toDateString, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import ExportMenu from '@/components/ExportMenu';
@@ -96,7 +96,7 @@ export default function TransactionsPage() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Transacciones');
 
-        const fileName = `transacciones_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const fileName = `transacciones_${getTodayString()}.xlsx`;
         XLSX.writeFile(wb, fileName);
     };
 
@@ -104,7 +104,7 @@ export default function TransactionsPage() {
         setEditingTransaction({
             ...transaction,
             amount: String(transaction.amount),
-            date: new Date(transaction.date).toISOString().split('T')[0],
+            date: toDateString(transaction.date),
         });
     };
 

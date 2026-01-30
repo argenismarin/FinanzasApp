@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { getTodayString } from '@/lib/utils';
 
 export default function BudgetsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -18,7 +19,7 @@ export default function BudgetsPage() {
         categoryId: '',
         amount: '',
         period: 'MONTHLY',
-        startDate: new Date().toISOString().split('T')[0]
+        startDate: getTodayString()
     });
 
     const { data: budgets, isLoading } = useQuery({
@@ -53,7 +54,7 @@ export default function BudgetsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
             setShowModal(false);
-            setFormData({ categoryId: '', amount: '', period: 'MONTHLY', startDate: new Date().toISOString().split('T')[0] });
+            setFormData({ categoryId: '', amount: '', period: 'MONTHLY', startDate: getTodayString() });
             showToast('Presupuesto creado exitosamente', 'success');
         },
         onError: (error: any) => {
