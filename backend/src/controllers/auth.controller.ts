@@ -86,15 +86,22 @@ export const login = async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error('Login error:', error);
-        // Provide more specific error messages
+        // Provide more specific error messages for debugging
         if (error.message?.includes('JWT_SECRET')) {
             res.status(500).json({ error: 'Server configuration error: JWT_SECRET not set' });
         } else if (error.code === 'P2002') {
             res.status(400).json({ error: 'Email already exists' });
-        } else if (error.code?.startsWith('P')) {
+        } else if (error.code === 'P2021') {
+            res.status(500).json({ error: 'Table does not exist. Run migrations.' });
+        } else if (error.code === 'P2010' || error.code === 'P1001' || error.code === 'P1002') {
             res.status(500).json({ error: 'Database connection error' });
         } else {
-            res.status(500).json({ error: 'Internal server error' });
+            // Show actual error in production for debugging
+            res.status(500).json({
+                error: 'Internal server error',
+                details: error.message,
+                code: error.code
+            });
         }
     }
 };
