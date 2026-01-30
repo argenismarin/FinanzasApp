@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 interface AuthRequest extends Request {
     user?: {
@@ -78,8 +76,12 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
                 transactionsCount: transactions.length
             }
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Get balance error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({
+            error: 'Internal server error',
+            details: process.env.NODE_ENV !== 'production' ? error.message : undefined,
+            code: error.code
+        });
     }
 };

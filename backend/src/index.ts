@@ -34,8 +34,25 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
+// CORS configuration - allow multiple origins
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+    'https://finanzas-app-wine.vercel.app'
+].filter(Boolean) as string[];
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.log('CORS blocked origin:', origin);
+            callback(null, false);
+        }
+    },
     credentials: true
 }));
 app.use(express.json());

@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import { NotificationService } from '../services/notification.service';
-
-const prisma = new PrismaClient();
 
 interface AuthRequest extends Request {
     user?: {
