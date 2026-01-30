@@ -84,9 +84,18 @@ export const login = async (req: Request, res: Response) => {
                 settings: user.settings
             }
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        // Provide more specific error messages
+        if (error.message?.includes('JWT_SECRET')) {
+            res.status(500).json({ error: 'Server configuration error: JWT_SECRET not set' });
+        } else if (error.code === 'P2002') {
+            res.status(400).json({ error: 'Email already exists' });
+        } else if (error.code?.startsWith('P')) {
+            res.status(500).json({ error: 'Database connection error' });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
 };
 
