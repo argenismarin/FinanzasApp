@@ -66,6 +66,28 @@ app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Database connection diagnostic endpoint
+app.get('/api/db-check', async (req: Request, res: Response) => {
+    try {
+        const prisma = (await import('./lib/prisma')).default;
+        // Try a simple query
+        const result = await prisma.$queryRaw`SELECT 1 as test`;
+        res.json({
+            status: 'connected',
+            database: 'PostgreSQL',
+            result,
+            dbUrl: process.env.DATABASE_URL ? 'configured (hidden)' : 'NOT SET'
+        });
+    } catch (error: any) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message,
+            code: error.code,
+            dbUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') : 'NOT SET'
+        });
+    }
+});
+
 // API Info
 app.get('/api', (req: Request, res: Response) => {
     res.json({
