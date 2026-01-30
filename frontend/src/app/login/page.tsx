@@ -54,7 +54,7 @@ export default function LoginPage() {
                                 onChange={(e) => setName(e.target.value)}
                                 required={isSignup}
                                 autoComplete="name"
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white text-gray-900"
                                 placeholder="Juan Pérez"
                             />
                         </div>
@@ -71,7 +71,7 @@ export default function LoginPage() {
                             onChange={(e) => setEmail(e.target.value)}
                             required
                             autoComplete="email"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white text-gray-900"
                             placeholder="tu@email.com"
                         />
                     </div>
@@ -87,7 +87,7 @@ export default function LoginPage() {
                             onChange={(e) => setPassword(e.target.value)}
                             required={isSignup}
                             autoComplete={isSignup ? 'new-password' : 'current-password'}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white text-gray-900"
                             placeholder="••••••••"
                         />
                     </div>
