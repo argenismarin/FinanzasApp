@@ -27,10 +27,14 @@ export default function HomePage() {
         <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             <div className="container mx-auto px-4 py-16">
                 <div className="text-center">
-                    <h1 className="text-6xl font-bold text-gray-900 mb-4">
-                        💰 FinanzasApp
+                    <div className="mb-6">
+                        <span className="text-5xl sm:text-6xl">💰</span>
+                    </div>
+                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-4">
+                        <span className="block sm:inline">Finanzas</span>
+                        <span className="block sm:inline">App</span>
                     </h1>
-                    <p className="text-xl text-gray-600 mb-8">
+                    <p className="text-lg sm:text-xl text-gray-600 mb-8 px-4">
                         Gestión inteligente de tus finanzas personales
                     </p>
 
