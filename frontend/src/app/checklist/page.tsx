@@ -234,7 +234,7 @@ export default function ChecklistPage() {
                                 <select
                                     value={selectedMonth}
                                     onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 >
                                     {Array.from({ length: 12 }, (_, i) => (
                                         <option key={i + 1} value={i + 1}>
@@ -250,7 +250,7 @@ export default function ChecklistPage() {
                                 <select
                                     value={selectedYear}
                                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 >
                                     <option value={2024}>2024</option>
                                     <option value={2025}>2025</option>
@@ -298,14 +298,14 @@ export default function ChecklistPage() {
                                     placeholder="Nombre (ej: Pago de arriendo)"
                                     value={newItem.name}
                                     onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                                 <input
                                     type="number"
                                     placeholder="Monto"
                                     value={newItem.amount}
                                     onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                                 <div className="grid grid-cols-2 gap-4">
                                     <input
@@ -315,12 +315,12 @@ export default function ChecklistPage() {
                                         placeholder="Día (1-31)"
                                         value={newItem.dueDay}
                                         onChange={(e) => setNewItem({ ...newItem, dueDay: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
                                     <select
                                         value={newItem.categoryId}
                                         onChange={(e) => setNewItem({ ...newItem, categoryId: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
                                         <option value="">Categoría</option>
                                         {categories?.map((cat: any) => (
@@ -359,14 +359,14 @@ export default function ChecklistPage() {
                                     placeholder="Nombre"
                                     value={editingItem.name}
                                     onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                                 <input
                                     type="number"
                                     placeholder="Monto"
                                     value={editingItem.amount}
                                     onChange={(e) => setEditingItem({ ...editingItem, amount: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                                 <div className="grid grid-cols-2 gap-4">
                                     <input
@@ -376,12 +376,12 @@ export default function ChecklistPage() {
                                         placeholder="Día (1-31)"
                                         value={editingItem.dueDay}
                                         onChange={(e) => setEditingItem({ ...editingItem, dueDay: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
                                     <select
                                         value={editingItem.categoryId}
                                         onChange={(e) => setEditingItem({ ...editingItem, categoryId: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
                                         <option value="">Categoría</option>
                                         {categories?.map((cat: any) => (
@@ -457,15 +457,17 @@ export default function ChecklistPage() {
                                                     categoryId: item.categoryId,
                                                     dueDay: item.dueDay.toString()
                                                 })}
-                                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-lg transition"
+                                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                 title="Editar item"
+                                                aria-label={`Editar item ${item.name}`}
                                             >
                                                 ✏️
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteItem(item.id, item.name)}
-                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition"
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                 title="Eliminar item"
+                                                aria-label={`Eliminar item ${item.name}`}
                                             >
                                                 🗑️
                                             </button>

@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 // Obtener todas las tarjetas de crédito del usuario
 export const getCreditCards = async (req: Request, res: Response) => {

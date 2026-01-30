@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 interface AuthRequest extends Request {
     user?: {
@@ -172,26 +170,61 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
         if (existingCompletion) {
             // Toggle completion
             if (existingCompletion.isCompleted) {
-                // Unmark as completed - delete transaction if exists
-                if (existingCompletion.transactionId) {
-                    await prisma.transaction.delete({
-                        where: { id: existingCompletion.transactionId }
-                    });
-                }
-
-                const updated = await prisma.checklistCompletion.update({
-                    where: { id: existingCompletion.id },
-                    data: {
-                        isCompleted: false,
-                        completedAt: null,
-                        transactionId: null
+                // Unmark as completed - delete transaction if exists (atomic transaction)
+                const result = await prisma.$transaction(async (tx) => {
+                    if (existingCompletion.transactionId) {
+                        await tx.transaction.delete({
+                            where: { id: existingCompletion.transactionId }
+                        });
                     }
+
+                    const updated = await tx.checklistCompletion.update({
+                        where: { id: existingCompletion.id },
+                        data: {
+                            isCompleted: false,
+                            completedAt: null,
+                            transactionId: null
+                        }
+                    });
+
+                    return updated;
                 });
 
-                return res.json({ ...updated, message: 'Marcado como no pagado y transacción eliminada' });
+                return res.json({ ...result, message: 'Marcado como no pagado y transacción eliminada' });
             } else {
-                // Mark as completed - create transaction
-                const transaction = await prisma.transaction.create({
+                // Mark as completed - create transaction (atomic transaction)
+                const result = await prisma.$transaction(async (tx) => {
+                    const transaction = await tx.transaction.create({
+                        data: {
+                            userId,
+                            type: 'EXPENSE',
+                            amount: item.amount,
+                            description: `${item.name} (Checklist ${selectedMonth}/${selectedYear})`,
+                            date: new Date(),
+                            categoryId: item.categoryId,
+                            currency: 'COP',
+                            createdBy: userId
+                        }
+                    });
+
+                    const updated = await tx.checklistCompletion.update({
+                        where: { id: existingCompletion.id },
+                        data: {
+                            isCompleted: true,
+                            completedAt: new Date(),
+                            transactionId: transaction.id
+                        }
+                    });
+
+                    return { ...updated, transaction };
+                });
+
+                return res.json({ ...result, message: 'Marcado como pagado y transacción creada' });
+            }
+        } else {
+            // Create new completion for THIS MONTH and transaction (atomic transaction)
+            const result = await prisma.$transaction(async (tx) => {
+                const transaction = await tx.transaction.create({
                     data: {
                         userId,
                         type: 'EXPENSE',
@@ -204,43 +237,20 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
                     }
                 });
 
-                const updated = await prisma.checklistCompletion.update({
-                    where: { id: existingCompletion.id },
+                const completion = await tx.checklistCompletion.create({
                     data: {
+                        checklistItemId: id,
+                        month: monthDate,
                         isCompleted: true,
                         completedAt: new Date(),
                         transactionId: transaction.id
                     }
                 });
 
-                return res.json({ ...updated, transaction, message: 'Marcado como pagado y transacción creada' });
-            }
-        } else {
-            // Create new completion for THIS MONTH and transaction
-            const transaction = await prisma.transaction.create({
-                data: {
-                    userId,
-                    type: 'EXPENSE',
-                    amount: item.amount,
-                    description: `${item.name} (Checklist ${selectedMonth}/${selectedYear})`,
-                    date: new Date(),
-                    categoryId: item.categoryId,
-                    currency: 'COP',
-                    createdBy: userId
-                }
+                return { ...completion, transaction };
             });
 
-            const completion = await prisma.checklistCompletion.create({
-                data: {
-                    checklistItemId: id,
-                    month: monthDate,
-                    isCompleted: true,
-                    completedAt: new Date(),
-                    transactionId: transaction.id
-                }
-            });
-
-            res.json({ ...completion, transaction, message: 'Marcado como pagado y transacción creada' });
+            res.json({ ...result, message: 'Marcado como pagado y transacción creada' });
         }
     } catch (error: any) {
         console.error('Toggle checklist item error:', error);

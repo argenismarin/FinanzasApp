@@ -72,6 +72,9 @@ model Transaction {
   @@index([date])
   @@index([type])
   @@index([createdBy], map: "transactions_created_by_idx")
+  @@index([userId, date], map: "transactions_user_date_idx")
+  @@index([userId, type, date], map: "transactions_user_type_date_idx")
+  @@index([userId, categoryId, type, date], map: "transactions_budget_lookup_idx")
   @@map("transactions")
 }
 
@@ -110,6 +113,7 @@ model Budget {
 
   @@index([userId])
   @@index([categoryId])
+  @@index([userId, isActive], map: "budgets_user_active_idx")
   @@map("budgets")
 }
 
@@ -295,6 +299,7 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+  @@index([userId, isRead, createdAt], map: "notifications_user_unread_idx")
   @@map("notifications")
 }
 

@@ -176,7 +176,7 @@ export default function NewTransactionPage() {
                                 value={formData.categoryId}
                                 onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                                 required
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             >
                                 <option value="">Selecciona una categoría</option>
                                 {categories?.map((category: any) => (
@@ -277,7 +277,7 @@ export default function NewTransactionPage() {
                                 value={formData.description}
                                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                 required
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 placeholder="Ej: Mercado del mes"
                             />
                         </div>
@@ -293,7 +293,7 @@ export default function NewTransactionPage() {
                                 value={formData.date}
                                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                 required
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             />
                         </div>
 

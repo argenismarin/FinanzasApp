@@ -29,14 +29,15 @@ export function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center w-full h-full px-1 transition-colors ${
+              aria-label={`Ir a ${item.label}`}
+              className={`flex flex-col items-center justify-center w-full h-full min-h-[48px] px-1 transition-colors ${
                 isActive
                   ? 'text-blue-600 dark:text-blue-400'
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               <span className="text-xl mb-0.5">{item.icon}</span>
-              <span className="text-[10px] font-medium truncate max-w-full">{item.label}</span>
+              <span className="text-xs font-medium truncate max-w-full">{item.label}</span>
             </Link>
           );
         })}

@@ -31,6 +31,17 @@ class ApiClient {
         }
     }
 
+    // Helper method to get authorization headers for use in other components
+    // Use this instead of directly accessing localStorage
+    getAuthHeaders(): HeadersInit {
+        return this.getHeaders();
+    }
+
+    // Get the API URL for use in other components
+    getApiUrl(): string {
+        return API_URL;
+    }
+
     // Auth
     async login(email: string, password?: string, name?: string) {
         try {

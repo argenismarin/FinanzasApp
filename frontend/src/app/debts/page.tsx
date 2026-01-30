@@ -420,7 +420,7 @@ export default function DebtsPage() {
                                                             ...debt,
                                                             totalAmount: debt.totalAmount.toString()
                                                         })}
-                                                        className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1.5 sm:p-2 rounded"
+                                                        className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                         aria-label={`Editar deuda con ${debt.creditor}`}
                                                     >
                                                         ✏️
@@ -431,7 +431,7 @@ export default function DebtsPage() {
                                                                 deleteMutation.mutate(debt.id);
                                                             }
                                                         }}
-                                                        className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 sm:p-2 rounded"
+                                                        className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                         aria-label={`Eliminar deuda con ${debt.creditor}`}
                                                     >
                                                         🗑️
@@ -579,7 +579,7 @@ export default function DebtsPage() {
                                                 ...abono,
                                                 totalAmount: abono.totalAmount.toString()
                                             })}
-                                            className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-1.5 sm:p-2 rounded"
+                                            className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                             aria-label={`Editar abono de ${abono.creditor}`}
                                         >
                                             ✏️
@@ -590,7 +590,7 @@ export default function DebtsPage() {
                                                     deleteMutation.mutate(abono.id);
                                                 }
                                             }}
-                                            className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-1.5 sm:p-2 rounded"
+                                            className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                             aria-label={`Eliminar abono de ${abono.creditor}`}
                                         >
                                             🗑️

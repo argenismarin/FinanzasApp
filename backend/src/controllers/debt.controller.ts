@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 interface AuthRequest extends Request {
     user?: {
@@ -147,34 +145,38 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        // Create expense transaction for debt payment
-        await prisma.transaction.create({
-            data: {
-                userId,
-                amount: parseFloat(amount),
-                type: 'EXPENSE',
-                categoryId: debtCategory.id,
-                description: description || `Pago a: ${debt.creditor}`,
-                date: new Date(),
-                createdBy: userId
-            }
-        });
+        // Use atomic transaction for all payment-related operations
+        const updated = await prisma.$transaction(async (tx) => {
+            // Create expense transaction for debt payment
+            await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: parseFloat(amount),
+                    type: 'EXPENSE',
+                    categoryId: debtCategory!.id,
+                    description: description || `Pago a: ${debt.creditor}`,
+                    date: new Date(),
+                    createdBy: userId
+                }
+            });
 
-        // Create payment history record
-        await prisma.debtPayment.create({
-            data: {
-                debtId: id,
-                amount: parseFloat(amount),
-                description: description || null,
-                paymentDate: new Date()
-            }
-        });
+            // Create payment history record
+            await tx.debtPayment.create({
+                data: {
+                    debtId: id,
+                    amount: parseFloat(amount),
+                    description: description || null,
+                    paymentDate: new Date()
+                }
+            });
 
-        const updated = await prisma.debt.update({
-            where: { id },
-            data: {
-                paidAmount: newPaidAmount
-            }
+            // Update debt with new paid amount
+            return tx.debt.update({
+                where: { id },
+                data: {
+                    paidAmount: newPaidAmount
+                }
+            });
         });
 
         res.json({

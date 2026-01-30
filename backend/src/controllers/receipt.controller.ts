@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import OpenAI from 'openai';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });

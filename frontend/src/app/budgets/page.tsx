@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/Toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
@@ -11,6 +12,7 @@ export default function BudgetsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { showToast } = useToast();
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({
         categoryId: '',
@@ -52,6 +54,10 @@ export default function BudgetsPage() {
             queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
             setShowModal(false);
             setFormData({ categoryId: '', amount: '', period: 'MONTHLY', startDate: new Date().toISOString().split('T')[0] });
+            showToast('Presupuesto creado exitosamente', 'success');
+        },
+        onError: (error: any) => {
+            showToast(error.message || 'Error al crear el presupuesto', 'error');
         }
     });
 
@@ -64,6 +70,10 @@ export default function BudgetsPage() {
         }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+            showToast('Presupuesto eliminado', 'success');
+        },
+        onError: (error: any) => {
+            showToast(error.message || 'Error al eliminar el presupuesto', 'error');
         }
     });
 
@@ -129,7 +139,8 @@ export default function BudgetsPage() {
                                     </div>
                                     <button
                                         onClick={() => deleteMutation.mutate(budget.id)}
-                                        className="text-red-600 hover:text-red-700"
+                                        className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                        aria-label={`Eliminar presupuesto de ${budget.category.name}`}
                                     >
                                         🗑️
                                     </button>

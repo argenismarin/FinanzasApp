@@ -32,7 +32,7 @@ export const getBudgets = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Get budget with progress
+// Get budget with progress (optimized - single query for all spent amounts)
 export const getBudgetProgress = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.id;
@@ -47,36 +47,60 @@ export const getBudgetProgress = async (req: AuthRequest, res: Response) => {
             }
         });
 
-        const budgetsWithProgress = await Promise.all(
-            budgets.map(async (budget) => {
-                const startDate = budget.startDate;
-                const endDate = budget.endDate || new Date();
+        if (budgets.length === 0) {
+            return res.json([]);
+        }
 
-                const spent = await prisma.transaction.aggregate({
-                    where: {
-                        userId: budget.userId,
-                        categoryId: budget.categoryId,
-                        type: 'EXPENSE',
-                        date: {
-                            gte: startDate,
-                            lte: endDate
-                        }
-                    },
-                    _sum: { amount: true }
-                });
+        // Get the date range for all budgets
+        const minStartDate = budgets.reduce((min, b) =>
+            b.startDate < min ? b.startDate : min, budgets[0].startDate);
+        const maxEndDate = budgets.reduce((max, b) => {
+            const end = b.endDate || new Date();
+            return end > max ? end : max;
+        }, budgets[0].endDate || new Date());
 
-                const spentAmount = spent._sum.amount ? Number(spent._sum.amount) : 0;
-                const budgetAmount = Number(budget.amount);
-                const percentage = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
+        // Get all category IDs and user IDs from budgets
+        const categoryIds = [...new Set(budgets.map(b => b.categoryId))];
+        const userIds = userRole === 'ADMIN'
+            ? [...new Set(budgets.map(b => b.userId))]
+            : [userId];
 
-                return {
-                    ...budget,
-                    spent: spentAmount,
-                    remaining: budgetAmount - spentAmount,
-                    percentage: Math.round(percentage * 100) / 100
-                };
-            })
-        );
+        // Single query to get all spending grouped by userId and categoryId
+        const spentByCategory = await prisma.transaction.groupBy({
+            by: ['userId', 'categoryId'],
+            where: {
+                userId: { in: userIds },
+                categoryId: { in: categoryIds },
+                type: 'EXPENSE',
+                date: {
+                    gte: minStartDate,
+                    lte: maxEndDate
+                }
+            },
+            _sum: { amount: true }
+        });
+
+        // Create a lookup map for quick access
+        const spentMap = new Map<string, number>();
+        spentByCategory.forEach(item => {
+            const key = `${item.userId}-${item.categoryId}`;
+            spentMap.set(key, Number(item._sum.amount) || 0);
+        });
+
+        // Build the result with progress calculated
+        const budgetsWithProgress = budgets.map(budget => {
+            const key = `${budget.userId}-${budget.categoryId}`;
+            const spentAmount = spentMap.get(key) || 0;
+            const budgetAmount = Number(budget.amount);
+            const percentage = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
+
+            return {
+                ...budget,
+                spent: spentAmount,
+                remaining: budgetAmount - spentAmount,
+                percentage: Math.round(percentage * 100) / 100
+            };
+        });
 
         res.json(budgetsWithProgress);
     } catch (error) {

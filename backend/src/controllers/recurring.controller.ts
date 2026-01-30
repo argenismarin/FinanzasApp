@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 // Obtener todas las transacciones recurrentes del usuario
 export const getRecurringTransactions = async (req: Request, res: Response) => {

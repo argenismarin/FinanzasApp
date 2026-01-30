@@ -47,7 +47,11 @@ export default function TransactionsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
+            showToast('Transaccion eliminada', 'success');
         },
+        onError: (error: any) => {
+            showToast(error.message || 'Error al eliminar la transaccion', 'error');
+        }
     });
 
     const updateMutation = useMutation({
@@ -56,7 +60,11 @@ export default function TransactionsPage() {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             setEditingTransaction(null);
+            showToast('Transaccion actualizada', 'success');
         },
+        onError: (error: any) => {
+            showToast(error.message || 'Error al actualizar la transaccion', 'error');
+        }
     });
 
     if (authLoading || !isAuthenticated) {
@@ -211,7 +219,7 @@ export default function TransactionsPage() {
             {/* Edit Modal */}
             {editingTransaction && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">
                             ✏️ Editar Transacción
                         </h2>
@@ -353,7 +361,7 @@ function TransactionRow({
                 <div className="flex gap-1">
                     <button
                         onClick={onEdit}
-                        className="text-blue-600 hover:text-blue-700 p-1.5 sm:p-2 hover:bg-blue-50 rounded-lg transition"
+                        className="text-blue-600 hover:text-blue-700 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                         title="Editar"
                         aria-label={`Editar transacción: ${transaction.description}`}
                     >
@@ -361,7 +369,7 @@ function TransactionRow({
                     </button>
                     <button
                         onClick={() => onDelete(transaction.id)}
-                        className="text-red-600 hover:text-red-700 p-1.5 sm:p-2 hover:bg-red-50 rounded-lg transition"
+                        className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                         title="Eliminar"
                         aria-label={`Eliminar transacción: ${transaction.description}`}
                     >
