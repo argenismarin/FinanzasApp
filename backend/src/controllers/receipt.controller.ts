@@ -56,6 +56,19 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
             });
         }
 
+        // Parse date safely
+        let extractedDate = null;
+        if (ocrData.date) {
+            try {
+                const parsed = new Date(ocrData.date);
+                if (!isNaN(parsed.getTime())) {
+                    extractedDate = parsed;
+                }
+            } catch (e) {
+                console.warn('Could not parse date:', ocrData.date);
+            }
+        }
+
         // Create receipt with extracted data
         const receipt = await prisma.receipt.create({
             data: {
@@ -63,7 +76,7 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
                 imageUrl: 'base64-processed', // No file storage in serverless
                 ocrData: JSON.stringify(ocrData),
                 extractedAmount: ocrData.amount || null,
-                extractedDate: ocrData.date ? new Date(ocrData.date) : null,
+                extractedDate,
                 extractedMerchant: ocrData.merchant || null,
                 confidenceScore: (ocrData.confidence || 75) / 100, // Convert to 0-1 scale
                 status: 'APPROVED'
@@ -76,7 +89,21 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
         });
     } catch (error: any) {
         console.error('Upload receipt error:', error);
-        res.status(500).json({ error: 'Internal server error', details: error.message });
+
+        // More descriptive error response
+        let errorMessage = 'Error interno del servidor';
+        if (error.message?.includes('timeout')) {
+            errorMessage = 'La solicitud tardó demasiado. Intenta con una imagen más pequeña.';
+        } else if (error.message?.includes('prisma') || error.message?.includes('database')) {
+            errorMessage = 'Error de base de datos. Intenta de nuevo.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        res.status(500).json({
+            error: errorMessage,
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 

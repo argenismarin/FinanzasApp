@@ -2,6 +2,8 @@ import OpenAI from 'openai';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+    timeout: 55000, // 55 seconds timeout (Vercel has 60s limit on Pro)
+    maxRetries: 1, // Only retry once to avoid timeout
 });
 
 export interface ReceiptData {
