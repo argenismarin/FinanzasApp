@@ -1,23 +1,51 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
 import Link from 'next/link';
 import CameraCapture from '@/components/CameraCapture';
+import { api } from '@/lib/api';
+import { formatCOP } from '@/lib/utils';
+
+interface OcrData {
+    amount: number;
+    date: string;
+    merchant?: string;
+    category?: string;
+    items?: Array<{
+        name: string;
+        quantity?: number;
+        price?: number;
+    }>;
+    confidence: number;
+}
+
+interface Category {
+    id: string;
+    name: string;
+    type: string;
+    icon: string;
+}
 
 export default function ReceiptsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const { showToast } = useToast();
     const router = useRouter();
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
-    const [uploading, setUploading] = useState(false);
     const [processing, setProcessing] = useState(false);
-    const [ocrData, setOcrData] = useState<any>(null);
+    const [ocrData, setOcrData] = useState<OcrData | null>(null);
     const [receiptId, setReceiptId] = useState<string | null>(null);
     const [showCamera, setShowCamera] = useState(false);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [creatingTransaction, setCreatingTransaction] = useState(false);
+
+    // Editable form fields
+    const [editAmount, setEditAmount] = useState<string>('');
+    const [editDate, setEditDate] = useState<string>('');
+    const [editDescription, setEditDescription] = useState<string>('');
+    const [editCategoryId, setEditCategoryId] = useState<string>('');
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
@@ -25,87 +53,136 @@ export default function ReceiptsPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const handleCameraCapture = (base64Data: string) => {
-        // Convert base64 to blob and then to file
-        const byteString = atob(base64Data);
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-            ia[i] = byteString.charCodeAt(i);
+    // Load categories
+    useEffect(() => {
+        const loadCategories = async () => {
+            try {
+                const response = await api.get('/categories');
+                const expenseCategories = response.data.filter((c: Category) => c.type === 'EXPENSE');
+                setCategories(expenseCategories);
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        };
+        if (isAuthenticated) {
+            loadCategories();
         }
-        const blob = new Blob([ab], { type: 'image/jpeg' });
-        const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        
-        setSelectedFile(file);
+    }, [isAuthenticated]);
+
+    // Update form when OCR data changes
+    useEffect(() => {
+        if (ocrData) {
+            setEditAmount(ocrData.amount?.toString() || '');
+            setEditDate(ocrData.date || new Date().toISOString().split('T')[0]);
+            setEditDescription(ocrData.merchant || '');
+
+            // Try to match suggested category
+            if (ocrData.category && categories.length > 0) {
+                const matchedCategory = categories.find(c =>
+                    c.name.toLowerCase().includes(ocrData.category!.toLowerCase()) ||
+                    ocrData.category!.toLowerCase().includes(c.name.toLowerCase())
+                );
+                if (matchedCategory) {
+                    setEditCategoryId(matchedCategory.id);
+                }
+            }
+        }
+    }, [ocrData, categories]);
+
+    const handleCameraCapture = (base64Data: string) => {
         setPreview(`data:image/jpeg;base64,${base64Data}`);
         setShowCamera(false);
+        setOcrData(null);
+        setReceiptId(null);
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setSelectedFile(file);
             const reader = new FileReader();
             reader.onloadend = () => {
                 setPreview(reader.result as string);
+                setOcrData(null);
+                setReceiptId(null);
             };
             reader.readAsDataURL(file);
         }
     };
 
-    const handleUploadAndProcess = async () => {
-        if (!selectedFile) return;
+    const handleProcessOCR = async () => {
+        if (!preview) return;
 
-        setUploading(true);
+        setProcessing(true);
         setOcrData(null);
 
         try {
-            // Step 1: Upload receipt
-            const formData = new FormData();
-            formData.append('receipt', selectedFile);
-
-            const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/receipts/upload`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: formData,
+            // Send base64 image directly to backend
+            const response = await api.post('/receipts/upload', {
+                imageBase64: preview
             });
 
-            if (!uploadResponse.ok) {
-                const errorData = await uploadResponse.json();
-                throw new Error(errorData.error || 'Error al subir la factura');
+            const data = response.data;
+            setReceiptId(data.id);
+
+            if (data.ocrError) {
+                showToast(`OCR parcial: ${data.ocrError}`, 'warning');
+            } else if (data.ocrData) {
+                setOcrData(data.ocrData);
+                showToast('Factura procesada con IA', 'success');
             }
-
-            const uploadData = await uploadResponse.json();
-            setReceiptId(uploadData.id);
-
-            // Step 2: Process with OCR
-            setProcessing(true);
-            const processResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/receipts/${uploadData.id}/process`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!processResponse.ok) {
-                const errorData = await processResponse.json();
-                throw new Error(errorData.details || errorData.error || 'Error al procesar con OCR');
-            }
-
-            const processData = await processResponse.json();
-            setOcrData(processData.ocrData);
-            showToast('Factura procesada con éxito', 'success');
-
         } catch (error: any) {
             console.error('Error:', error);
-            showToast(error.message || 'Error al procesar factura', 'error');
+            showToast(error.response?.data?.error || 'Error al procesar factura', 'error');
         } finally {
-            setUploading(false);
             setProcessing(false);
         }
+    };
+
+    const handleCreateTransaction = async () => {
+        if (!receiptId || !editAmount || !editCategoryId) {
+            showToast('Completa monto y categoria', 'error');
+            return;
+        }
+
+        setCreatingTransaction(true);
+
+        try {
+            await api.post(`/receipts/${receiptId}/create-transaction`, {
+                amount: parseFloat(editAmount),
+                description: editDescription,
+                date: editDate,
+                categoryId: editCategoryId
+            });
+
+            showToast('Transaccion creada exitosamente', 'success');
+
+            // Reset form
+            setPreview(null);
+            setOcrData(null);
+            setReceiptId(null);
+            setEditAmount('');
+            setEditDate('');
+            setEditDescription('');
+            setEditCategoryId('');
+
+            // Optionally redirect to transactions
+            router.push('/transactions');
+        } catch (error: any) {
+            console.error('Error:', error);
+            showToast(error.response?.data?.error || 'Error al crear transaccion', 'error');
+        } finally {
+            setCreatingTransaction(false);
+        }
+    };
+
+    const resetForm = () => {
+        setPreview(null);
+        setOcrData(null);
+        setReceiptId(null);
+        setEditAmount('');
+        setEditDate('');
+        setEditDescription('');
+        setEditCategoryId('');
     };
 
     if (authLoading || !isAuthenticated) {
@@ -117,8 +194,8 @@ export default function ReceiptsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-            {/* Camera Capture Modal - Full Screen */}
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+            {/* Camera Capture Modal */}
             {showCamera && (
                 <CameraCapture
                     onCapture={handleCameraCapture}
@@ -126,9 +203,9 @@ export default function ReceiptsPage() {
                 />
             )}
 
-            <header className="bg-white shadow-sm">
+            <header className="bg-white dark:bg-gray-800 shadow-sm">
                 <div className="container mx-auto px-4 py-4">
-                    <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
+                    <Link href="/dashboard" className="text-2xl font-bold text-gray-900 dark:text-white">
                         ← Dashboard
                     </Link>
                 </div>
@@ -136,19 +213,19 @@ export default function ReceiptsPage() {
 
             <main className="container mx-auto px-4 py-8">
                 <div className="max-w-4xl mx-auto">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-8">
-                        📸 Escanear Factura con OCR
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+                        Escanear Factura con OCR
                     </h1>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Upload/Camera Section */}
-                        <div className="bg-white rounded-2xl shadow-xl p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                                 Capturar Factura
                             </h2>
 
                             <div className="space-y-4">
-                                <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden" style={{ minHeight: '400px' }}>
+                                <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden" style={{ minHeight: '400px' }}>
                                     {preview ? (
                                         <div className="w-full p-4 flex flex-col items-center">
                                             <img
@@ -157,17 +234,18 @@ export default function ReceiptsPage() {
                                                 className="max-h-80 rounded-lg"
                                             />
                                             <button
-                                                onClick={() => { setPreview(null); setSelectedFile(null); setOcrData(null); }}
+                                                onClick={resetForm}
                                                 className="mt-4 text-red-600 hover:text-red-700 text-sm font-medium"
+                                                aria-label="Eliminar imagen"
                                             >
-                                                🗑️ Eliminar y tomar otra foto
+                                                Eliminar y tomar otra foto
                                             </button>
                                         </div>
                                     ) : (
                                         <div className="h-full flex items-center justify-center py-16">
                                             <div className="text-center">
                                                 <div className="text-6xl mb-4">📄</div>
-                                                <p className="text-gray-600 text-lg">
+                                                <p className="text-gray-600 dark:text-gray-400 text-lg">
                                                     Toma una foto o sube una imagen
                                                 </p>
                                             </div>
@@ -180,9 +258,10 @@ export default function ReceiptsPage() {
                                         <button
                                             onClick={() => setShowCamera(true)}
                                             className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                                            aria-label="Abrir camara"
                                         >
                                             <span className="text-2xl">📷</span>
-                                            <span>Abrir Cámara</span>
+                                            <span>Abrir Camara</span>
                                         </button>
                                         <label className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-4 px-6 rounded-xl transition-all cursor-pointer text-center shadow-lg flex items-center justify-center gap-2">
                                             <span className="text-2xl">📁</span>
@@ -197,82 +276,142 @@ export default function ReceiptsPage() {
                                     </div>
                                 )}
 
-                                {preview && (
+                                {preview && !ocrData && (
                                     <button
-                                        onClick={handleUploadAndProcess}
-                                        disabled={!selectedFile || uploading || processing}
+                                        onClick={handleProcessOCR}
+                                        disabled={processing}
                                         className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        aria-label="Analizar con OpenAI"
                                     >
-                                        {uploading ? '📤 Subiendo...' : processing ? '🤖 Procesando con IA...' : '🔍 Analizar con OpenAI'}
+                                        {processing ? 'Procesando con IA...' : 'Analizar con OpenAI'}
                                     </button>
                                 )}
                             </div>
                         </div>
 
-                        {/* OCR Results */}
-                        <div className="bg-white rounded-2xl shadow-xl p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">
-                                Datos Extraídos
+                        {/* OCR Results & Editable Form */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                                {ocrData ? 'Datos Extraidos' : 'Esperando Imagen'}
                             </h2>
 
                             {ocrData ? (
                                 <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Monto
-                                        </label>
-                                        <p className="text-2xl font-bold text-green-600">
-                                            ${ocrData.amount || 0} {ocrData.currency || 'COP'}
-                                        </p>
+                                    {/* Confidence indicator */}
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Confianza:</span>
+                                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                            <div
+                                                className={`h-2 rounded-full ${
+                                                    ocrData.confidence >= 80 ? 'bg-green-500' :
+                                                    ocrData.confidence >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                                                }`}
+                                                style={{ width: `${ocrData.confidence}%` }}
+                                            />
+                                        </div>
+                                        <span className="font-medium">{ocrData.confidence}%</span>
                                     </div>
 
+                                    {/* Editable Amount */}
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Fecha
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Monto *
                                         </label>
-                                        <p className="text-lg">{ocrData.date || 'No detectada'}</p>
+                                        <input
+                                            type="number"
+                                            value={editAmount}
+                                            onChange={(e) => setEditAmount(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="0"
+                                        />
+                                        {editAmount && (
+                                            <p className="mt-1 text-sm text-green-600 dark:text-green-400">
+                                                {formatCOP(parseFloat(editAmount))}
+                                            </p>
+                                        )}
                                     </div>
 
+                                    {/* Editable Date */}
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Comercio
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Fecha *
                                         </label>
-                                        <p className="text-lg">{ocrData.merchant || 'No detectado'}</p>
+                                        <input
+                                            type="date"
+                                            value={editDate}
+                                            onChange={(e) => setEditDate(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                        />
                                     </div>
 
+                                    {/* Editable Description */}
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Categoría Sugerida
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Descripcion / Comercio
                                         </label>
-                                        <p className="text-lg">{ocrData.category || 'No detectada'}</p>
+                                        <input
+                                            type="text"
+                                            value={editDescription}
+                                            onChange={(e) => setEditDescription(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                            placeholder="Nombre del comercio"
+                                        />
                                     </div>
 
+                                    {/* Category Select */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Categoria *
+                                        </label>
+                                        <select
+                                            value={editCategoryId}
+                                            onChange={(e) => setEditCategoryId(e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                        >
+                                            <option value="">Seleccionar categoria</option>
+                                            {categories.map((cat) => (
+                                                <option key={cat.id} value={cat.id}>
+                                                    {cat.icon} {cat.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {ocrData.category && (
+                                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                Sugerida por IA: {ocrData.category}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Items if available */}
                                     {ocrData.items && ocrData.items.length > 0 && (
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                Items
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Items detectados
                                             </label>
-                                            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-                                                {ocrData.items.map((item: any, i: number) => (
+                                            <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                                                {ocrData.items.map((item, i) => (
                                                     <li key={i}>
-                                                        {item.description} x{item.quantity} - ${item.price}
+                                                        {item.name} {item.quantity ? `x${item.quantity}` : ''} {item.price ? `- $${item.price}` : ''}
                                                     </li>
                                                 ))}
                                             </ul>
                                         </div>
                                     )}
 
-                                    <Link
-                                        href={`/transactions/new?amount=${ocrData.amount}&description=${ocrData.merchant || ''}&date=${ocrData.date || ''}`}
-                                        className="block w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors text-center"
+                                    {/* Create Transaction Button */}
+                                    <button
+                                        onClick={handleCreateTransaction}
+                                        disabled={creatingTransaction || !editAmount || !editCategoryId}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        aria-label="Crear transaccion"
                                     >
-                                        ✅ Crear Transacción
-                                    </Link>
+                                        {creatingTransaction ? 'Creando...' : 'Crear Transaccion'}
+                                    </button>
                                 </div>
                             ) : (
-                                <div className="text-center py-12 text-gray-500">
+                                <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                                     <p className="text-4xl mb-4">🤖</p>
-                                    <p>Sube una factura para ver los datos extraídos</p>
+                                    <p>Sube una factura para ver los datos extraidos</p>
                                     <p className="text-sm mt-2">Powered by OpenAI Vision API</p>
                                 </div>
                             )}
@@ -280,15 +419,15 @@ export default function ReceiptsPage() {
                     </div>
 
                     {/* Info */}
-                    <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                        <h3 className="font-semibold text-blue-900 mb-2">
-                            💡 Cómo funciona
+                    <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                            Como funciona
                         </h3>
-                        <ul className="text-sm text-blue-800 space-y-1">
-                            <li>1. Toma una foto con la cámara o sube una imagen guardada</li>
-                            <li>2. La IA de OpenAI analizará la factura automáticamente</li>
-                            <li>3. Revisa los datos extraídos (monto, fecha, comercio, items)</li>
-                            <li>4. Crea la transacción con un click</li>
+                        <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                            <li>1. Toma una foto con la camara o sube una imagen guardada</li>
+                            <li>2. La IA de OpenAI analizara la factura automaticamente</li>
+                            <li>3. Revisa y edita los datos extraidos (monto, fecha, comercio)</li>
+                            <li>4. Selecciona la categoria y crea la transaccion</li>
                         </ul>
                     </div>
                 </div>

@@ -42,6 +42,41 @@ class ApiClient {
         return API_URL;
     }
 
+    // Generic HTTP methods
+    async get(endpoint: string) {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            headers: this.getHeaders(),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const error: any = new Error(errorData.error || `Request failed: ${response.status}`);
+            error.response = { data: errorData, status: response.status };
+            throw error;
+        }
+
+        const data = await response.json();
+        return { data };
+    }
+
+    async post(endpoint: string, body: any) {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const error: any = new Error(errorData.error || `Request failed: ${response.status}`);
+            error.response = { data: errorData, status: response.status };
+            throw error;
+        }
+
+        const data = await response.json();
+        return { data };
+    }
+
     // Auth
     async login(email: string, password?: string, name?: string) {
         try {

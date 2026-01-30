@@ -3,8 +3,16 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+interface AuthRequest extends Request {
+    user?: {
+        id: string;
+        email: string;
+        role: string;
+    };
+}
+
 // Obtener historial de transferencias
-export const getTransfers = async (req: Request, res: Response) => {
+export const getTransfers = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { limit = 20, offset = 0 } = req.query;
@@ -45,7 +53,7 @@ export const getTransfers = async (req: Request, res: Response) => {
 };
 
 // Crear una transferencia entre cuentas
-export const createTransfer = async (req: Request, res: Response) => {
+export const createTransfer = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { fromAccountId, toAccountId, amount, description, transferDate } = req.body;
@@ -138,7 +146,7 @@ export const createTransfer = async (req: Request, res: Response) => {
 };
 
 // Eliminar una transferencia (reversar)
-export const deleteTransfer = async (req: Request, res: Response) => {
+export const deleteTransfer = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -187,7 +195,7 @@ export const deleteTransfer = async (req: Request, res: Response) => {
 };
 
 // Obtener cuentas disponibles para transferir
-export const getAccountsForTransfer = async (req: Request, res: Response) => {
+export const getAccountsForTransfer = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
 

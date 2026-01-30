@@ -119,13 +119,16 @@ export const exportMonthlyReport = async (req: AuthRequest, res: Response) => {
 
         const categories = Object.values(categoryData);
 
-        // Get balance data
-        const balance = await prisma.transaction.findMany({
-            where: { userId }
+        // Get balance data - calculate from all transactions up to end of this month
+        const allTransactionsUpToMonth = await prisma.transaction.findMany({
+            where: {
+                userId,
+                date: { lte: monthEnd }
+            }
         });
 
         let bankBalance = 0;
-        balance.forEach(t => {
+        allTransactionsUpToMonth.forEach(t => {
             if (t.type === 'INCOME') {
                 bankBalance += Number(t.amount);
             } else {

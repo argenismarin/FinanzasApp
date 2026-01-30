@@ -115,11 +115,11 @@ async function main() {
                 name: 'Argenis David Marin Adames',
                 role: 'ADMIN',
                 isActive: true,
-                settings: {
+                settings: JSON.stringify({
                     currency: 'COP',
                     locale: 'es-CO',
                     theme: 'light'
-                }
+                })
             }
         });
         console.log('✅ Admin user created:', adminUser.email);

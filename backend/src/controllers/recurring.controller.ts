@@ -1,8 +1,16 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 
+interface AuthRequest extends Request {
+    user?: {
+        id: string;
+        email: string;
+        role: string;
+    };
+}
+
 // Obtener todas las transacciones recurrentes del usuario
-export const getRecurringTransactions = async (req: Request, res: Response) => {
+export const getRecurringTransactions = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
 
@@ -22,7 +30,7 @@ export const getRecurringTransactions = async (req: Request, res: Response) => {
 };
 
 // Crear transacción recurrente
-export const createRecurringTransaction = async (req: Request, res: Response) => {
+export const createRecurringTransaction = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const {
@@ -109,7 +117,7 @@ export const createRecurringTransaction = async (req: Request, res: Response) =>
 };
 
 // Actualizar transacción recurrente
-export const updateRecurringTransaction = async (req: Request, res: Response) => {
+export const updateRecurringTransaction = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -149,7 +157,7 @@ export const updateRecurringTransaction = async (req: Request, res: Response) =>
 };
 
 // Eliminar (desactivar) transacción recurrente
-export const deleteRecurringTransaction = async (req: Request, res: Response) => {
+export const deleteRecurringTransaction = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -175,7 +183,7 @@ export const deleteRecurringTransaction = async (req: Request, res: Response) =>
 };
 
 // Ejecutar transacción recurrente manualmente
-export const executeRecurringTransaction = async (req: Request, res: Response) => {
+export const executeRecurringTransaction = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -198,10 +206,10 @@ export const executeRecurringTransaction = async (req: Request, res: Response) =
                 description: `${recurring.description} (Recurrente)`,
                 date: new Date(),
                 isRecurring: true,
-                recurringPattern: {
+                recurringPattern: JSON.stringify({
                     recurringId: recurring.id,
                     frequency: recurring.frequency
-                }
+                })
             }
         });
 
@@ -257,7 +265,7 @@ export const executeRecurringTransaction = async (req: Request, res: Response) =
 };
 
 // Obtener transacciones pendientes de ejecución
-export const getPendingRecurringTransactions = async (req: Request, res: Response) => {
+export const getPendingRecurringTransactions = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const today = new Date();
@@ -283,7 +291,7 @@ export const getPendingRecurringTransactions = async (req: Request, res: Respons
 };
 
 // Ejecutar todas las transacciones pendientes automáticamente
-export const executeAllPendingRecurring = async (req: Request, res: Response) => {
+export const executeAllPendingRecurring = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const today = new Date();
@@ -312,10 +320,10 @@ export const executeAllPendingRecurring = async (req: Request, res: Response) =>
                         description: `${recurring.description} (Auto)`,
                         date: new Date(),
                         isRecurring: true,
-                        recurringPattern: {
+                        recurringPattern: JSON.stringify({
                             recurringId: recurring.id,
                             frequency: recurring.frequency
-                        }
+                        })
                     }
                 });
 

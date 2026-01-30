@@ -1,8 +1,16 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 
+interface AuthRequest extends Request {
+    user?: {
+        id: string;
+        email: string;
+        role: string;
+    };
+}
+
 // Obtener todas las tarjetas de crédito del usuario
-export const getCreditCards = async (req: Request, res: Response) => {
+export const getCreditCards = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
 
@@ -56,7 +64,7 @@ export const getCreditCards = async (req: Request, res: Response) => {
 };
 
 // Obtener una tarjeta específica con sus transacciones
-export const getCreditCard = async (req: Request, res: Response) => {
+export const getCreditCard = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -101,7 +109,7 @@ export const getCreditCard = async (req: Request, res: Response) => {
 };
 
 // Crear nueva tarjeta de crédito
-export const createCreditCard = async (req: Request, res: Response) => {
+export const createCreditCard = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const {
@@ -150,7 +158,7 @@ export const createCreditCard = async (req: Request, res: Response) => {
 };
 
 // Actualizar tarjeta de crédito
-export const updateCreditCard = async (req: Request, res: Response) => {
+export const updateCreditCard = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -195,7 +203,7 @@ export const updateCreditCard = async (req: Request, res: Response) => {
 };
 
 // Eliminar (desactivar) tarjeta de crédito
-export const deleteCreditCard = async (req: Request, res: Response) => {
+export const deleteCreditCard = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -221,7 +229,7 @@ export const deleteCreditCard = async (req: Request, res: Response) => {
 };
 
 // Agregar transacción a tarjeta de crédito
-export const addCreditCardTransaction = async (req: Request, res: Response) => {
+export const addCreditCardTransaction = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -284,7 +292,7 @@ export const addCreditCardTransaction = async (req: Request, res: Response) => {
 };
 
 // Registrar pago a tarjeta de crédito
-export const addCreditCardPayment = async (req: Request, res: Response) => {
+export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
@@ -340,7 +348,7 @@ export const addCreditCardPayment = async (req: Request, res: Response) => {
 };
 
 // Obtener resumen de todas las tarjetas
-export const getCreditCardsSummary = async (req: Request, res: Response) => {
+export const getCreditCardsSummary = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
 

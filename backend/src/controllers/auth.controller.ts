@@ -41,11 +41,11 @@ export const login = async (req: Request, res: Response) => {
                     password: hashedPassword,
                     role: 'USER',
                     isActive: true,
-                    settings: {
+                    settings: JSON.stringify({
                         currency: 'COP',
                         locale: 'es-CO',
                         theme: 'light'
-                    }
+                    })
                 }
             });
         } else {

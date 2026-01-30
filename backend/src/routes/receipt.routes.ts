@@ -3,16 +3,26 @@ import { authenticate } from '../middleware/auth';
 import {
     uploadReceipt,
     getReceipts,
-    processReceipt,
-    deleteReceipt,
-    upload
+    getReceipt,
+    createTransactionFromReceipt,
+    deleteReceipt
 } from '../controllers/receipt.controller';
 
 const router = Router();
 
-router.post('/upload', authenticate, upload.single('receipt'), uploadReceipt);
+// Upload receipt with base64 image and process OCR in one step
+router.post('/upload', authenticate, uploadReceipt);
+
+// Get all receipts for user
 router.get('/', authenticate, getReceipts);
-router.post('/:id/process', authenticate, processReceipt);
+
+// Get single receipt
+router.get('/:id', authenticate, getReceipt);
+
+// Create transaction from receipt data
+router.post('/:id/create-transaction', authenticate, createTransactionFromReceipt);
+
+// Delete receipt
 router.delete('/:id', authenticate, deleteReceipt);
 
 export default router;
