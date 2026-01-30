@@ -64,19 +64,19 @@ export default function TagInput({ tags, onChange, placeholder = 'Agregar etique
 
     return (
         <div className="relative">
-            <div className="w-full px-4 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition">
+            <div className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition bg-white dark:bg-gray-700">
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2 mb-2">
                     {tags.map(tag => (
                         <span
                             key={tag}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-full text-sm"
                         >
                             #{tag}
                             <button
                                 type="button"
                                 onClick={() => removeTag(tag)}
-                                className="hover:text-blue-900"
+                                className="hover:text-blue-900 dark:hover:text-blue-100"
                                 aria-label={`Eliminar etiqueta ${tag}`}
                             >
                                 x
@@ -97,19 +97,19 @@ export default function TagInput({ tags, onChange, placeholder = 'Agregar etique
                     onFocus={() => setShowSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder={tags.length === 0 ? placeholder : ''}
-                    className="w-full outline-none text-sm"
+                    className="w-full outline-none text-sm bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 />
             </div>
 
             {/* Suggestions Dropdown */}
             {showSuggestions && inputValue && filteredSuggestions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {filteredSuggestions.slice(0, 8).map(suggestion => (
                         <button
                             key={suggestion}
                             type="button"
                             onClick={() => addTag(suggestion)}
-                            className="w-full px-4 py-2 text-left hover:bg-blue-50 text-sm"
+                            className="w-full px-4 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/30 text-sm text-gray-900 dark:text-white"
                         >
                             #{suggestion}
                         </button>
@@ -120,13 +120,13 @@ export default function TagInput({ tags, onChange, placeholder = 'Agregar etique
             {/* Quick Suggestions */}
             {tags.length === 0 && !inputValue && (
                 <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-500">Sugerencias:</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Sugerencias:</span>
                     {suggestions.slice(0, 6).map(suggestion => (
                         <button
                             key={suggestion}
                             type="button"
                             onClick={() => addTag(suggestion)}
-                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition"
+                            className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full transition"
                         >
                             +{suggestion}
                         </button>

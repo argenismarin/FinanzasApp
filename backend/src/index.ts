@@ -100,6 +100,49 @@ app.get('/api/db-check', async (req: Request, res: Response) => {
     }
 });
 
+// OpenAI configuration check endpoint
+app.get('/api/openai-check', async (req: Request, res: Response) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+        return res.status(500).json({
+            status: 'error',
+            message: 'OPENAI_API_KEY no está configurada',
+            configured: false
+        });
+    }
+
+    // Check if key format looks valid (starts with sk-)
+    const isValidFormat = apiKey.startsWith('sk-');
+    const keyPreview = apiKey.substring(0, 10) + '...' + apiKey.substring(apiKey.length - 4);
+
+    // Test the API key with a simple request
+    try {
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({ apiKey });
+
+        // Simple test - list models (very cheap operation)
+        await openai.models.list();
+
+        res.json({
+            status: 'ok',
+            configured: true,
+            keyFormat: isValidFormat ? 'valid' : 'invalid',
+            keyPreview,
+            message: 'OpenAI API key is configured and working'
+        });
+    } catch (error: any) {
+        res.status(500).json({
+            status: 'error',
+            configured: true,
+            keyFormat: isValidFormat ? 'valid' : 'invalid',
+            keyPreview,
+            error: error.message,
+            code: error.code
+        });
+    }
+});
+
 // API Info
 app.get('/api', (req: Request, res: Response) => {
     res.json({

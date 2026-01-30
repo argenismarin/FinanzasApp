@@ -157,37 +157,37 @@ export default function SavingsPage() {
 
     if (authLoading || isLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center">
-                <p className="text-gray-600">Cargando...</p>
+            <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+                <p className="text-gray-600 dark:text-gray-400">Cargando...</p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 p-4 md:p-8">
+        <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 dark:from-gray-900 dark:to-gray-800 p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
                     <button
                         onClick={() => router.push('/dashboard')}
-                        className="mb-4 text-green-600 hover:text-green-700 flex items-center gap-2"
+                        className="mb-4 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 flex items-center gap-2"
                     >
                         ← Volver al Dashboard
                     </button>
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">🏦 Ahorros / Cajitas</h1>
-                    <p className="text-gray-600">Dinero guardado que NO está disponible para gastar</p>
+                    <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">🏦 Ahorros / Cajitas</h1>
+                    <p className="text-gray-600 dark:text-gray-400">Dinero guardado que NO está disponible para gastar</p>
                 </div>
 
                 {/* Summary Card */}
-                <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <p className="text-sm text-gray-600">Total Ahorrado</p>
-                            <p className="text-2xl font-bold text-green-600">{formatCOP(totalSavings)}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Ahorrado</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCOP(totalSavings)}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600">Cajitas / Bolsillos</p>
-                            <p className="text-2xl font-bold text-gray-900">{savings.length}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Cajitas / Bolsillos</p>
+                            <p className="text-2xl font-bold text-gray-900 dark:text-white">{savings.length}</p>
                         </div>
                         <div>
                             <button
@@ -202,8 +202,8 @@ export default function SavingsPage() {
 
                 {/* Add Form */}
                 {showAddForm && (
-                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Nuevo Ahorro</h3>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Nuevo Ahorro</h3>
                         <div className="space-y-4">
                             <input
                                 type="text"
@@ -236,7 +236,7 @@ export default function SavingsPage() {
                                 </button>
                                 <button
                                     onClick={() => setShowAddForm(false)}
-                                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg"
+                                    className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg"
                                 >
                                     Cancelar
                                 </button>
@@ -247,8 +247,8 @@ export default function SavingsPage() {
 
                 {/* Edit Form */}
                 {editingSaving && (
-                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">✏️ Editar Ahorro</h3>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">✏️ Editar Ahorro</h3>
                         <div className="space-y-4">
                             <input
                                 type="text"
@@ -287,7 +287,7 @@ export default function SavingsPage() {
                                 </button>
                                 <button
                                     onClick={() => setEditingSaving(null)}
-                                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg"
+                                    className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg"
                                 >
                                     Cancelar
                                 </button>
@@ -297,16 +297,16 @@ export default function SavingsPage() {
                 )}
 
                 {/* Savings List */}
-                <div className="bg-white rounded-2xl shadow-xl p-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">Mis Ahorros</h2>
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Mis Ahorros</h2>
                     {savings.length === 0 ? (
-                        <p className="text-gray-500 text-center py-8">No tienes ahorros registrados</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-center py-8">No tienes ahorros registrados</p>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {savings.map((saving: any) => (
-                                <div key={saving.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition">
+                                <div key={saving.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-lg dark:bg-gray-700/50 transition">
                                     <div className="flex justify-between items-start mb-2">
-                                        <h3 className="font-bold text-lg text-gray-900">💰 {saving.name}</h3>
+                                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">💰 {saving.name}</h3>
                                         <div className="flex gap-1">
                                             <button
                                                 onClick={() => setEditingSaving({
@@ -333,13 +333,13 @@ export default function SavingsPage() {
                                             </button>
                                         </div>
                                     </div>
-                                    <p className="text-2xl font-bold text-green-600 mb-2">
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400 mb-2">
                                         {formatCOP(parseFloat(saving.amount))}
                                     </p>
                                     {saving.purpose && (
-                                        <p className="text-sm text-gray-600 mb-2">{saving.purpose}</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{saving.purpose}</p>
                                     )}
-                                    <p className="text-xs text-gray-500 mb-3">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                                         Creado: {new Date(saving.createdAt).toLocaleDateString('es-CO')}
                                     </p>
                                     <button
@@ -355,8 +355,8 @@ export default function SavingsPage() {
                 </div>
 
                 {/* Info Card */}
-                <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-800">
+                <div className="mt-6 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 dark:text-blue-300">
                         💡 <strong>Nota:</strong> El dinero guardado en estas cajitas NO se cuenta como disponible para gastar.
                         Es tu dinero de emergencia o para proyectos específicos.
                     </p>
@@ -366,18 +366,18 @@ export default function SavingsPage() {
                 {withdrawModal && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 w-[calc(100%-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto" role="dialog" aria-labelledby="withdraw-modal-title">
-                            <h3 id="withdraw-modal-title" className="text-lg font-bold text-gray-900 mb-4">
+                            <h3 id="withdraw-modal-title" className="text-lg font-bold text-gray-900 dark:text-white mb-4">
                                 💸 Retirar de Ahorro
                             </h3>
-                            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                                <p className="text-sm text-gray-600">Ahorro:</p>
-                                <p className="font-semibold text-gray-900">{withdrawModal.saving.name}</p>
-                                <p className="text-sm text-gray-600 mt-2">Disponible:</p>
-                                <p className="font-bold text-green-600">{formatCOP(parseFloat(withdrawModal.saving.amount))}</p>
+                            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Ahorro:</p>
+                                <p className="font-semibold text-gray-900 dark:text-white">{withdrawModal.saving.name}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Disponible:</p>
+                                <p className="font-bold text-green-600 dark:text-green-400">{formatCOP(parseFloat(withdrawModal.saving.amount))}</p>
                             </div>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                         Monto a retirar
                                     </label>
                                     <CurrencyInput
@@ -396,7 +396,7 @@ export default function SavingsPage() {
                                     </button>
                                     <button
                                         onClick={() => setWithdrawModal(null)}
-                                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg font-semibold"
+                                        className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg font-semibold"
                                     >
                                         Cancelar
                                     </button>

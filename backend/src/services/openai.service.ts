@@ -22,6 +22,16 @@ export interface ReceiptData {
 
 // Analyze receipt with improved OCR
 export async function analyzeReceipt(imageBase64: string): Promise<ReceiptData> {
+    // Validate API key
+    if (!process.env.OPENAI_API_KEY) {
+        throw new Error('OPENAI_API_KEY no está configurada en el servidor');
+    }
+
+    // Validate image data
+    if (!imageBase64 || imageBase64.length < 100) {
+        throw new Error('Imagen base64 inválida o muy pequeña');
+    }
+
     try {
         const response = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
@@ -78,24 +88,58 @@ Responde SOLO con el JSON válido, sin texto adicional.`,
 
         const content = response.choices[0].message.content;
         if (!content) {
-            throw new Error('No response from OpenAI');
+            throw new Error('OpenAI no devolvió contenido en la respuesta');
+        }
+
+        // Clean response - remove markdown code blocks if present
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith('```json')) {
+            cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (cleanContent.startsWith('```')) {
+            cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
         }
 
         // Parse JSON response
-        const data = JSON.parse(content.trim());
-        
+        let data;
+        try {
+            data = JSON.parse(cleanContent);
+        } catch (parseError) {
+            console.error('JSON parse error. Content received:', cleanContent);
+            throw new Error(`Error al parsear respuesta de OpenAI: ${cleanContent.substring(0, 200)}`);
+        }
+
         // Validate required fields
-        if (!data.amount) {
-            throw new Error('No amount found in receipt');
+        if (!data.amount && data.amount !== 0) {
+            throw new Error('No se pudo extraer el monto de la factura. Intenta con una imagen más clara.');
         }
 
         return {
             ...data,
             confidence: data.confidence || 75 // Default confidence
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error analyzing receipt:', error);
-        throw new Error('Failed to analyze receipt');
+
+        // Provide more specific error messages
+        if (error.message?.includes('API key')) {
+            throw new Error('Error de configuración: API key de OpenAI inválida');
+        }
+        if (error.message?.includes('rate limit')) {
+            throw new Error('Límite de uso de OpenAI alcanzado. Intenta en unos minutos.');
+        }
+        if (error.message?.includes('invalid_api_key')) {
+            throw new Error('API key de OpenAI inválida o expirada');
+        }
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+            throw new Error('No se pudo conectar con OpenAI. Verifica tu conexión.');
+        }
+
+        // Re-throw with original message if it's already descriptive
+        if (error.message && !error.message.includes('Failed to')) {
+            throw error;
+        }
+
+        throw new Error('Error al analizar la factura. Intenta con una imagen más clara.');
     }
 }
 

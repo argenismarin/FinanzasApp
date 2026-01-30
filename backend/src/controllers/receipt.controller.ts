@@ -27,12 +27,18 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
         // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
         const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
+        // Validate image size (max ~10MB in base64)
+        if (base64Data.length > 15000000) {
+            return res.status(400).json({ error: 'La imagen es muy grande. Usa una imagen menor a 10MB.' });
+        }
+
         // Process OCR immediately using the service
         let ocrData;
         try {
             ocrData = await analyzeReceipt(base64Data);
         } catch (ocrError: any) {
-            console.error('OCR processing error:', ocrError);
+            console.error('OCR processing error:', ocrError.message);
+
             // Create receipt with PENDING status if OCR fails
             const receipt = await prisma.receipt.create({
                 data: {
@@ -41,9 +47,12 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
                     status: 'PENDING'
                 }
             });
+
+            // Return more descriptive error
+            const errorMessage = ocrError.message || 'No se pudo procesar la imagen. Intenta con una foto más clara.';
             return res.status(201).json({
                 ...receipt,
-                ocrError: ocrError.message || 'OCR processing failed'
+                ocrError: errorMessage
             });
         }
 

@@ -96,10 +96,10 @@ export default function GoalsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-            <header className="bg-white shadow-sm">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+            <header className="bg-white dark:bg-gray-800 shadow-sm">
                 <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-                    <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
+                    <Link href="/dashboard" className="text-2xl font-bold text-gray-900 dark:text-white">
                         ← Metas de Ahorro
                     </Link>
                     <button
@@ -119,14 +119,14 @@ export default function GoalsPage() {
                 ) : goals && goals.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {goals.map((goal: any) => (
-                            <div key={goal.id} className="bg-white rounded-2xl shadow-xl p-6">
+                            <div key={goal.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex-1">
-                                        <h3 className="text-xl font-bold text-gray-900 mb-1">
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
                                             {goal.isCompleted ? '✅' : '🎯'} {goal.name}
                                         </h3>
                                         {goal.deadline && (
-                                            <p className="text-sm text-gray-500">
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">
                                                 📅 {new Date(goal.deadline).toLocaleDateString()}
                                             </p>
                                         )}
@@ -140,21 +140,21 @@ export default function GoalsPage() {
                                 </div>
 
                                 <div className="space-y-3 mb-4">
-                                    <div className="flex justify-between text-sm">
+                                    <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
                                         <span>Progreso</span>
                                         <span className="font-semibold">
                                             ${goal.currentAmount.toLocaleString()} / ${goal.targetAmount.toLocaleString()}
                                         </span>
                                     </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-4">
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
                                         <div
                                             className="bg-gradient-to-r from-blue-500 to-purple-500 h-4 rounded-full transition-all"
                                             style={{ width: `${Math.min(goal.percentage, 100)}%` }}
                                         ></div>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">{goal.percentage.toFixed(1)}%</span>
-                                        <span className="text-blue-600">
+                                        <span className="text-gray-600 dark:text-gray-400">{goal.percentage.toFixed(1)}%</span>
+                                        <span className="text-blue-600 dark:text-blue-400">
                                             Faltan: ${goal.remaining.toLocaleString()}
                                         </span>
                                     </div>
@@ -173,7 +173,7 @@ export default function GoalsPage() {
                                 )}
 
                                 {goal.isCompleted && (
-                                    <div className="bg-green-50 text-green-700 text-center py-2 rounded-lg font-semibold">
+                                    <div className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-center py-2 rounded-lg font-semibold">
                                         🎉 ¡Meta Completada!
                                     </div>
                                 )}
@@ -183,7 +183,7 @@ export default function GoalsPage() {
                 ) : (
                     <div className="text-center py-12">
                         <p className="text-4xl mb-4">🎯</p>
-                        <p className="text-gray-600 mb-4">No tienes metas de ahorro</p>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">No tienes metas de ahorro</p>
                         <button
                             onClick={() => setShowModal(true)}
                             className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg"
@@ -197,11 +197,11 @@ export default function GoalsPage() {
             {/* Create Modal */}
             {showModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl p-8 max-w-md w-full">
-                        <h2 className="text-2xl font-bold mb-6">Nueva Meta de Ahorro</h2>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Nueva Meta de Ahorro</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Nombre de la Meta
                                 </label>
                                 <input
@@ -209,13 +209,13 @@ export default function GoalsPage() {
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     required
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     placeholder="Ej: Vacaciones, Auto nuevo..."
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Monto Objetivo
                                 </label>
                                 <input
@@ -225,20 +225,20 @@ export default function GoalsPage() {
                                     required
                                     min="0"
                                     step="10000"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     placeholder="5000000"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Fecha Límite (Opcional)
                                 </label>
                                 <input
                                     type="date"
                                     value={formData.deadline}
                                     onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
                             </div>
 
@@ -246,7 +246,7 @@ export default function GoalsPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 rounded-lg"
+                                    className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-semibold py-3 rounded-lg"
                                 >
                                     Cancelar
                                 </button>
@@ -266,12 +266,12 @@ export default function GoalsPage() {
             {/* Contribute Modal */}
             {showContributeModal && selectedGoal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl p-8 max-w-md w-full">
-                        <h2 className="text-2xl font-bold mb-2">Agregar Dinero</h2>
-                        <p className="text-gray-600 mb-6">{selectedGoal.name}</p>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Agregar Dinero</h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">{selectedGoal.name}</p>
                         <form onSubmit={handleContribute} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Monto a Agregar
                                 </label>
                                 <input
@@ -281,16 +281,16 @@ export default function GoalsPage() {
                                     required
                                     min="0"
                                     step="1000"
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     placeholder="50000"
                                 />
                             </div>
 
-                            <div className="bg-blue-50 p-4 rounded-lg text-sm">
-                                <p className="text-gray-700">
+                            <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg text-sm">
+                                <p className="text-gray-700 dark:text-gray-300">
                                     Actual: <span className="font-semibold">${selectedGoal.currentAmount.toLocaleString()}</span>
                                 </p>
-                                <p className="text-gray-700">
+                                <p className="text-gray-700 dark:text-gray-300">
                                     Objetivo: <span className="font-semibold">${selectedGoal.targetAmount.toLocaleString()}</span>
                                 </p>
                             </div>
@@ -302,7 +302,7 @@ export default function GoalsPage() {
                                         setShowContributeModal(false);
                                         setContributeAmount('');
                                     }}
-                                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 rounded-lg"
+                                    className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-semibold py-3 rounded-lg"
                                 >
                                     Cancelar
                                 </button>

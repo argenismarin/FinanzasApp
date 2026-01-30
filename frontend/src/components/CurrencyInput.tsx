@@ -76,7 +76,7 @@ export default function CurrencyInput({
                 className={`w-full pl-10 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px] sm:min-h-0 ${className}`}
             />
             {displayValue && (
-                <div className="mt-1 text-xs text-gray-500 text-right">
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-right">
                     {new Intl.NumberFormat('es-CO', {
                         style: 'currency',
                         currency: 'COP',
@@ -127,13 +127,13 @@ export function SimpleCurrencyInput({
 
     return (
         <div className="relative">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">$</span>
             <input
                 type="text"
                 value={displayValue}
                 onChange={handleChange}
                 placeholder={placeholder}
-                className={`w-full pl-6 pr-2 py-2 border border-gray-300 rounded-lg ${className}`}
+                className={`w-full pl-6 pr-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${className}`}
             />
         </div>
     );

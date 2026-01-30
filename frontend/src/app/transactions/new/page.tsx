@@ -104,11 +104,11 @@ export default function NewTransactionPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
             {/* Header */}
-            <header className="bg-white shadow-sm">
+            <header className="bg-white dark:bg-gray-800 shadow-sm">
                 <div className="container mx-auto px-4 py-4">
-                    <Link href="/transactions" className="text-2xl font-bold text-gray-900">
+                    <Link href="/transactions" className="text-2xl font-bold text-gray-900 dark:text-white">
                         ← Volver
                     </Link>
                 </div>
@@ -116,15 +116,15 @@ export default function NewTransactionPage() {
 
             {/* Main Content */}
             <main className="container mx-auto px-4 py-8">
-                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl mx-auto">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-8">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-2xl mx-auto">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
                         Nueva Transacción
                     </h1>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Type */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Tipo
                             </label>
                             <div className="grid grid-cols-2 gap-4">
@@ -132,30 +132,30 @@ export default function NewTransactionPage() {
                                     type="button"
                                     onClick={() => setFormData({ ...formData, type: 'INCOME', categoryId: '' })}
                                     className={`p-4 rounded-lg border-2 transition ${formData.type === 'INCOME'
-                                            ? 'border-green-600 bg-green-50'
-                                            : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-green-600 bg-green-50 dark:bg-green-900/30'
+                                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-700'
                                         }`}
                                 >
                                     <div className="text-3xl mb-2">💰</div>
-                                    <div className="font-semibold">Ingreso</div>
+                                    <div className="font-semibold text-gray-900 dark:text-white">Ingreso</div>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setFormData({ ...formData, type: 'EXPENSE', categoryId: '' })}
                                     className={`p-4 rounded-lg border-2 transition ${formData.type === 'EXPENSE'
-                                            ? 'border-red-600 bg-red-50'
-                                            : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-red-600 bg-red-50 dark:bg-red-900/30'
+                                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-700'
                                         }`}
                                 >
                                     <div className="text-3xl mb-2">💸</div>
-                                    <div className="font-semibold">Gasto</div>
+                                    <div className="font-semibold text-gray-900 dark:text-white">Gasto</div>
                                 </button>
                             </div>
                         </div>
 
                         {/* Amount */}
                         <div>
-                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Monto (COP)
                             </label>
                             <CurrencyInput
@@ -168,7 +168,7 @@ export default function NewTransactionPage() {
 
                         {/* Category */}
                         <div>
-                            <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Categoría
                             </label>
                             <select
@@ -268,7 +268,7 @@ export default function NewTransactionPage() {
 
                         {/* Description */}
                         <div>
-                            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Descripción
                             </label>
                             <input
@@ -284,7 +284,7 @@ export default function NewTransactionPage() {
 
                         {/* Date */}
                         <div>
-                            <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                            <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Fecha
                             </label>
                             <input
@@ -299,7 +299,7 @@ export default function NewTransactionPage() {
 
                         {/* Tags */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                 Etiquetas (opcional)
                             </label>
                             <TagInput

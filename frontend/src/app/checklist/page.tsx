@@ -203,10 +203,10 @@ export default function ChecklistPage() {
     const progress = items.length > 0 ? (completedCount / items.length) * 100 : 0;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-            <header className="bg-white shadow-sm">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+            <header className="bg-white dark:bg-gray-800 shadow-sm">
                 <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-                    <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
+                    <Link href="/dashboard" className="text-2xl font-bold text-gray-900 dark:text-white">
                         ← Dashboard
                     </Link>
                     <button
@@ -220,15 +220,15 @@ export default function ChecklistPage() {
 
             <main className="container mx-auto px-4 py-8">
                 <div className="max-w-4xl mx-auto">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-6">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
                         ✅ Checklist de Gastos Mensuales
                     </h1>
 
                     {/* Month Selector */}
-                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
                         <div className="flex gap-4 items-center">
                             <div className="flex-1">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Mes
                                 </label>
                                 <select
@@ -244,7 +244,7 @@ export default function ChecklistPage() {
                                 </select>
                             </div>
                             <div className="flex-1">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Año
                                 </label>
                                 <select
@@ -261,15 +261,15 @@ export default function ChecklistPage() {
                     </div>
 
                     {/* Progress */}
-                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-900">Progreso del Mes</h2>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Progreso del Mes</h2>
                             <span className="text-2xl font-bold text-blue-600">
                                 {completedCount}/{items.length}
                             </span>
                         </div>
 
-                        <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-4">
                             <div
                                 className="bg-blue-600 h-4 rounded-full transition-all"
                                 style={{ width: `${progress}%` }}
@@ -278,20 +278,20 @@ export default function ChecklistPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <p className="text-sm text-gray-600">Total Estimado</p>
-                                <p className="text-xl font-bold text-gray-900">{formatCOP(totalAmount)}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Total Estimado</p>
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{formatCOP(totalAmount)}</p>
                             </div>
                             <div>
-                                <p className="text-sm text-gray-600">Completado</p>
-                                <p className="text-xl font-bold text-green-600">{formatCOP(completedAmount)}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Completado</p>
+                                <p className="text-xl font-bold text-green-600 dark:text-green-400">{formatCOP(completedAmount)}</p>
                             </div>
                         </div>
                     </div>
 
                     {/* Add Form */}
                     {showAddForm && (
-                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Nuevo Item</h3>
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Nuevo Item</h3>
                             <div className="space-y-4">
                                 <input
                                     type="text"
@@ -340,7 +340,7 @@ export default function ChecklistPage() {
                                     </button>
                                     <button
                                         onClick={() => setShowAddForm(false)}
-                                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg"
+                                        className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg"
                                     >
                                         Cancelar
                                     </button>
@@ -351,8 +351,8 @@ export default function ChecklistPage() {
 
                     {/* Edit Form Modal */}
                     {editingItem && (
-                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">✏️ Editar Item</h3>
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">✏️ Editar Item</h3>
                             <div className="space-y-4">
                                 <input
                                     type="text"
@@ -401,7 +401,7 @@ export default function ChecklistPage() {
                                     </button>
                                     <button
                                         onClick={() => setEditingItem(null)}
-                                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg"
+                                        className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg"
                                     >
                                         Cancelar
                                     </button>
@@ -411,8 +411,8 @@ export default function ChecklistPage() {
                     )}
 
                     {/* Checklist Items */}
-                    <div className="bg-white rounded-2xl shadow-xl p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Items del Mes</h2>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Items del Mes</h2>
 
                         {isLoading ? (
                             <div className="text-center py-8">
@@ -426,8 +426,8 @@ export default function ChecklistPage() {
                                         <div
                                             key={item.id}
                                             className={`flex items-center gap-4 p-4 rounded-lg border-2 transition ${item.isCompleted
-                                                ? 'border-green-200 bg-green-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                                ? 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/30'
+                                                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-700/50'
                                                 }`}
                                         >
                                             <input
@@ -437,15 +437,15 @@ export default function ChecklistPage() {
                                                 className="w-6 h-6 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                             />
                                             <div className="flex-1">
-                                                <p className={`font-medium ${item.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                                <p className={`font-medium ${item.isCompleted ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
                                                     {item.name}
                                                 </p>
-                                                <p className="text-sm text-gray-500">
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">
                                                     Día {item.dueDay} • {formatCOP(parseFloat(item.amount))}
                                                 </p>
                                             </div>
                                             {item.isCompleted && item.completedAt && (
-                                                <span className="text-xs text-green-600">
+                                                <span className="text-xs text-green-600 dark:text-green-400">
                                                     ✓ {new Date(item.completedAt).toLocaleDateString('es-CO')}
                                                 </span>
                                             )}
@@ -475,7 +475,7 @@ export default function ChecklistPage() {
                                     ))}
                             </div>
                         ) : (
-                            <div className="text-center py-12 text-gray-500">
+                            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                                 <p className="text-lg mb-2">📝 No hay items en el checklist</p>
                                 <p className="text-sm">Agrega gastos recurrentes para no olvidarlos</p>
                             </div>
