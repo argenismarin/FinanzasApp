@@ -34,27 +34,12 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
-// CORS configuration - allow multiple origins
-const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    'http://localhost:3000',
-    'https://finanzas-app-wine.vercel.app'
-].filter(Boolean) as string[];
-
+// CORS configuration - allow all origins for now to debug production issues
 app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl)
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            console.log('CORS blocked origin:', origin, 'Allowed:', allowedOrigins);
-            // Return error with allowed origins for debugging
-            callback(new Error(`Origin ${origin} not allowed. Allowed: ${allowedOrigins.join(', ')}`));
-        }
-    },
-    credentials: true
+    origin: true, // Allow all origins temporarily
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -82,6 +67,15 @@ app.get('/health', (req: Request, res: Response) => {
 
 app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Version endpoint for deployment verification
+app.get('/api/version', (req: Request, res: Response) => {
+    res.json({
+        version: '2.0.0-20260130',
+        deployedAt: '2026-01-30T04:50:00Z',
+        codebase: 'github-main'
+    });
 });
 
 // Database connection diagnostic endpoint
