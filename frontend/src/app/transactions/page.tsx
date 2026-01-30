@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCOP } from '@/lib/utils';
+import { formatCOP, parseDate } from '@/lib/utils';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import ExportMenu from '@/components/ExportMenu';
 import CurrencyInput from '@/components/CurrencyInput';
+import { useToast } from '@/components/Toast';
 
 export default function TransactionsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { showToast } = useToast();
     const [filter, setFilter] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
     const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
@@ -69,12 +71,12 @@ export default function TransactionsPage() {
 
     const exportToExcel = () => {
         if (transactions.length === 0) {
-            alert('No hay transacciones para exportar');
+            showToast('No hay transacciones para exportar', 'warning');
             return;
         }
 
         const exportData = transactions.map((t: any) => ({
-            Fecha: new Date(t.date).toLocaleDateString('es-CO'),
+            Fecha: parseDate(t.date).toLocaleDateString('es-CO'),
             Tipo: t.type === 'INCOME' ? 'Ingreso' : 'Gasto',
             Categoría: t.category.name,
             Descripción: t.description,
@@ -340,7 +342,7 @@ function TransactionRow({
                     <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 flex-wrap">
                         <span className="truncate">{transaction.category.name}</span>
                         <span className="hidden sm:inline">•</span>
-                        <span>{new Date(transaction.date).toLocaleDateString('es-CO')}</span>
+                        <span>{parseDate(transaction.date).toLocaleDateString('es-CO')}</span>
                     </div>
                 </div>
             </div>
@@ -353,6 +355,7 @@ function TransactionRow({
                         onClick={onEdit}
                         className="text-blue-600 hover:text-blue-700 p-1.5 sm:p-2 hover:bg-blue-50 rounded-lg transition"
                         title="Editar"
+                        aria-label={`Editar transacción: ${transaction.description}`}
                     >
                         ✏️
                     </button>
@@ -360,6 +363,7 @@ function TransactionRow({
                         onClick={() => onDelete(transaction.id)}
                         className="text-red-600 hover:text-red-700 p-1.5 sm:p-2 hover:bg-red-50 rounded-lg transition"
                         title="Eliminar"
+                        aria-label={`Eliminar transacción: ${transaction.description}`}
                     >
                         🗑️
                     </button>

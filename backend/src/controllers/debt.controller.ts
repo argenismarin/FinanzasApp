@@ -180,7 +180,7 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
         res.json({
             ...updated,
             pendingAmount: totalAmount - newPaidAmount,
-            message: newPaidAmount === totalAmount ? 'Debt fully paid!' : 'Payment registered'
+            message: newPaidAmount === totalAmount ? '¡Deuda pagada completamente!' : '💰 Pago registrado exitosamente'
         });
     } catch (error) {
         console.error('Pay debt error:', error);

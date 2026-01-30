@@ -308,6 +308,47 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
             balance: (data as any).income - (data as any).expense
         }));
 
+        // Get checklist progress for current month
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        const checklistItems = await prisma.checklistItem.findMany({
+            where: { userId, isActive: true },
+            include: { category: true }
+        });
+
+        // Get completions for current month
+        const completions = await prisma.checklistCompletion.findMany({
+            where: {
+                checklistItem: { userId },
+                month: {
+                    gte: monthStart,
+                    lte: monthEnd
+                }
+            }
+        });
+
+        const completedItemIds = new Set(completions.map(c => c.checklistItemId));
+
+        const checklistProgress = {
+            total: checklistItems.length,
+            completed: checklistItems.filter(item => completedItemIds.has(item.id)).length,
+            totalAmount: checklistItems.reduce((sum, item) => sum + Number(item.amount), 0),
+            paidAmount: checklistItems
+                .filter(item => completedItemIds.has(item.id))
+                .reduce((sum, item) => sum + Number(item.amount), 0),
+            pendingItems: checklistItems
+                .filter(item => !completedItemIds.has(item.id))
+                .slice(0, 3)
+                .map(item => ({
+                    id: item.id,
+                    name: item.name,
+                    amount: Number(item.amount),
+                    dueDay: item.dueDay,
+                    category: item.category
+                }))
+        };
+
         res.json({
             currentMonth: {
                 income: currentIncome,
@@ -328,10 +369,176 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
             budgetAlerts,
             upcomingReminders,
             goalsProgress,
+            checklistProgress,
             trend
         });
     } catch (error) {
         console.error('Get dashboard stats error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Get financial report for a period
+export const getFinancialReport = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const months = parseInt(req.query.months as string) || 6;
+
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+
+        // Get all transactions in period
+        const transactions = await prisma.transaction.findMany({
+            where: {
+                userId,
+                date: { gte: startDate }
+            },
+            include: { category: true },
+            orderBy: { date: 'desc' }
+        });
+
+        // Calculate summary
+        const totalIncome = transactions
+            .filter(t => t.type === 'INCOME')
+            .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        const totalExpenses = transactions
+            .filter(t => t.type === 'EXPENSE')
+            .reduce((sum, t) => sum + Number(t.amount), 0);
+
+        const balance = totalIncome - totalExpenses;
+        const avgMonthlyIncome = totalIncome / months;
+        const avgMonthlyExpenses = totalExpenses / months;
+        const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
+
+        // Monthly trend
+        const monthlyData: { [key: string]: { income: number; expenses: number } } = {};
+
+        // Initialize all months
+        for (let i = 0; i < months; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = d.toLocaleString('es-CO', { month: 'short', year: 'numeric' });
+            monthlyData[key] = { income: 0, expenses: 0 };
+        }
+
+        transactions.forEach(t => {
+            const key = t.date.toLocaleString('es-CO', { month: 'short', year: 'numeric' });
+            if (monthlyData[key]) {
+                if (t.type === 'INCOME') {
+                    monthlyData[key].income += Number(t.amount);
+                } else {
+                    monthlyData[key].expenses += Number(t.amount);
+                }
+            }
+        });
+
+        const monthlyTrend = Object.entries(monthlyData)
+            .map(([month, data]) => ({
+                month,
+                income: data.income,
+                expenses: data.expenses,
+                balance: data.income - data.expenses
+            }))
+            .reverse();
+
+        // Expenses by category
+        const expenseCategoryData: { [key: string]: { name: string; icon: string; total: number; count: number } } = {};
+        let totalExpenseAmount = 0;
+
+        transactions
+            .filter(t => t.type === 'EXPENSE')
+            .forEach(t => {
+                const catId = t.categoryId;
+                if (!expenseCategoryData[catId]) {
+                    expenseCategoryData[catId] = {
+                        name: t.category.name,
+                        icon: t.category.icon,
+                        total: 0,
+                        count: 0
+                    };
+                }
+                expenseCategoryData[catId].total += Number(t.amount);
+                expenseCategoryData[catId].count += 1;
+                totalExpenseAmount += Number(t.amount);
+            });
+
+        const expensesByCategory = Object.entries(expenseCategoryData)
+            .map(([catId, data]) => ({
+                categoryId: catId,
+                categoryName: data.name,
+                categoryIcon: data.icon,
+                total: data.total,
+                count: data.count,
+                percentage: totalExpenseAmount > 0 ? (data.total / totalExpenseAmount) * 100 : 0
+            }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 10);
+
+        // Income by category
+        const incomeCategoryData: { [key: string]: { name: string; icon: string; total: number; count: number } } = {};
+        let totalIncomeAmount = 0;
+
+        transactions
+            .filter(t => t.type === 'INCOME')
+            .forEach(t => {
+                const catId = t.categoryId;
+                if (!incomeCategoryData[catId]) {
+                    incomeCategoryData[catId] = {
+                        name: t.category.name,
+                        icon: t.category.icon,
+                        total: 0,
+                        count: 0
+                    };
+                }
+                incomeCategoryData[catId].total += Number(t.amount);
+                incomeCategoryData[catId].count += 1;
+                totalIncomeAmount += Number(t.amount);
+            });
+
+        const incomeByCategory = Object.entries(incomeCategoryData)
+            .map(([catId, data]) => ({
+                categoryId: catId,
+                categoryName: data.name,
+                categoryIcon: data.icon,
+                total: data.total,
+                count: data.count,
+                percentage: totalIncomeAmount > 0 ? (data.total / totalIncomeAmount) * 100 : 0
+            }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 10);
+
+        // Top expenses
+        const topExpenses = transactions
+            .filter(t => t.type === 'EXPENSE')
+            .sort((a, b) => Number(b.amount) - Number(a.amount))
+            .slice(0, 10)
+            .map(t => ({
+                id: t.id,
+                description: t.description,
+                amount: Number(t.amount),
+                date: t.date,
+                category: {
+                    name: t.category.name,
+                    icon: t.category.icon
+                }
+            }));
+
+        res.json({
+            summary: {
+                totalIncome,
+                totalExpenses,
+                balance,
+                avgMonthlyIncome,
+                avgMonthlyExpenses,
+                savingsRate
+            },
+            monthlyTrend,
+            expensesByCategory,
+            incomeByCategory,
+            topExpenses
+        });
+    } catch (error) {
+        console.error('Get financial report error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

@@ -10,6 +10,15 @@ export interface AuthRequest extends Request {
     };
 }
 
+// Get JWT_SECRET with validation
+const getJwtSecret = (): string => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('JWT_SECRET environment variable is not defined');
+    }
+    return secret;
+};
+
 export const authenticate = async (
     req: AuthRequest,
     res: Response,
@@ -22,7 +31,7 @@ export const authenticate = async (
             return res.status(401).json({ error: 'No token provided' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+        const decoded = jwt.verify(token, getJwtSecret()) as {
             userId: string;
         };
 

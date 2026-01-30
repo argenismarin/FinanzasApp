@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useToast } from '@/components/Toast';
 
 interface ExportMenuProps {
     type: 'transactions' | 'debts' | 'budgets' | 'monthly-report';
@@ -12,6 +13,7 @@ interface ExportMenuProps {
 export default function ExportMenu({ type, filters }: ExportMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const { showToast } = useToast();
 
     const exportToCSV = async () => {
         try {
@@ -62,10 +64,10 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
             window.URL.revokeObjectURL(downloadUrl);
 
             setIsOpen(false);
-            alert('✅ Exportación completada');
+            showToast('Exportación completada', 'success');
         } catch (error) {
             console.error('Export error:', error);
-            alert('❌ Error al exportar');
+            showToast('Error al exportar', 'error');
         } finally {
             setIsExporting(false);
         }
@@ -164,10 +166,10 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
             doc.save(`reporte_${data.period.year}_${data.period.month}.pdf`);
             
             setIsOpen(false);
-            alert('✅ PDF generado exitosamente');
+            showToast('PDF generado exitosamente', 'success');
         } catch (error) {
             console.error('PDF export error:', error);
-            alert('❌ Error al generar PDF');
+            showToast('Error al generar PDF', 'error');
         } finally {
             setIsExporting(false);
         }

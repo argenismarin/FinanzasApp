@@ -3,11 +3,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/Toast';
 import Link from 'next/link';
 import CameraCapture from '@/components/CameraCapture';
 
 export default function ReceiptsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
+    const { showToast } = useToast();
     const router = useRouter();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
@@ -95,11 +97,11 @@ export default function ReceiptsPage() {
 
             const processData = await processResponse.json();
             setOcrData(processData.ocrData);
-            alert('¡Factura procesada con éxito! ✅');
+            showToast('Factura procesada con éxito', 'success');
 
         } catch (error: any) {
             console.error('Error:', error);
-            alert(`Error: ${error.message}`);
+            showToast(error.message || 'Error al procesar factura', 'error');
         } finally {
             setUploading(false);
             setProcessing(false);

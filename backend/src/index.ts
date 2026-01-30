@@ -22,6 +22,9 @@ import balanceRoutes from './routes/balance.routes';
 import notificationRoutes from './routes/notification.routes';
 import exportRoutes from './routes/export.routes';
 import aiRoutes from './routes/ai.routes';
+import creditCardRoutes from './routes/credit-cards.routes';
+import recurringRoutes from './routes/recurring.routes';
+import transferRoutes from './routes/transfer.routes';
 
 // Load environment variables
 dotenv.config();
@@ -106,6 +109,9 @@ app.use('/api/balance', balanceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/credit-cards', creditCardRoutes);
+app.use('/api/recurring', recurringRoutes);
+app.use('/api/transfers', transferRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

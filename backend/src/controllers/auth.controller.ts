@@ -1,6 +1,16 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import prisma from '../lib/prisma';
+
+// Validate JWT_SECRET is defined
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('CRITICAL: JWT_SECRET environment variable is not defined!');
+    process.exit(1);
+}
+
+const SALT_ROUNDS = 10;
 
 export const login = async (req: Request, res: Response) => {
     try {
@@ -21,11 +31,14 @@ export const login = async (req: Request, res: Response) => {
                 return res.status(400).json({ error: 'Name is required for new users' });
             }
 
+            // Hash password if provided
+            const hashedPassword = password ? await bcrypt.hash(password, SALT_ROUNDS) : null;
+
             user = await prisma.user.create({
                 data: {
                     email,
                     name,
-                    password: password || null,
+                    password: hashedPassword,
                     role: 'USER',
                     isActive: true,
                     settings: {
@@ -37,8 +50,14 @@ export const login = async (req: Request, res: Response) => {
             });
         } else {
             // Existing user - verify password if they have one
-            if (user.password && password !== user.password) {
-                return res.status(401).json({ error: 'Invalid password' });
+            if (user.password) {
+                if (!password) {
+                    return res.status(401).json({ error: 'Password is required' });
+                }
+                const isValidPassword = await bcrypt.compare(password, user.password);
+                if (!isValidPassword) {
+                    return res.status(401).json({ error: 'Invalid password' });
+                }
             }
         }
 
@@ -49,7 +68,7 @@ export const login = async (req: Request, res: Response) => {
         // Generate JWT
         const token = jwt.sign(
             { userId: user.id },
-            process.env.JWT_SECRET || 'default_secret',
+            JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as any
         );
 

@@ -86,6 +86,15 @@ export default function BudgetsPage() {
         return 'bg-green-500';
     };
 
+    const getPeriodLabel = (period: string) => {
+        const labels: Record<string, string> = {
+            'MONTHLY': 'Mensual',
+            'WEEKLY': 'Semanal',
+            'YEARLY': 'Anual'
+        };
+        return labels[period] || period;
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
             <header className="bg-white shadow-sm">
@@ -116,7 +125,7 @@ export default function BudgetsPage() {
                                         <h3 className="text-xl font-bold text-gray-900">
                                             {budget.category.icon} {budget.category.name}
                                         </h3>
-                                        <p className="text-sm text-gray-500">{budget.period}</p>
+                                        <p className="text-sm text-gray-500">{getPeriodLabel(budget.period)}</p>
                                     </div>
                                     <button
                                         onClick={() => deleteMutation.mutate(budget.id)}
@@ -130,7 +139,7 @@ export default function BudgetsPage() {
                                     <div className="flex justify-between text-sm">
                                         <span>Gastado</span>
                                         <span className="font-semibold">
-                                            ${budget.spent.toLocaleString()} / ${budget.amount.toLocaleString()}
+                                            ${Number(budget.spent).toLocaleString('es-CO')} / ${Number(budget.amount).toLocaleString('es-CO')}
                                         </span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-4">

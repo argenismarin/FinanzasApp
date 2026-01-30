@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { parsePagination, parseDateSafe, parseAmount } from '../lib/validation';
 
 export const getTransactions = async (req: AuthRequest, res: Response) => {
     try {
@@ -26,18 +27,22 @@ export const getTransactions = async (req: AuthRequest, res: Response) => {
 
         if (startDate || endDate) {
             where.date = {};
-            if (startDate) {
-                where.date.gte = new Date(startDate as string);
+            const startDateParsed = parseDateSafe(startDate as string);
+            const endDateParsed = parseDateSafe(endDate as string);
+            if (startDateParsed) {
+                where.date.gte = startDateParsed;
             }
-            if (endDate) {
-                where.date.lte = new Date(endDate as string);
+            if (endDateParsed) {
+                where.date.lte = endDateParsed;
             }
         }
 
-        // Pagination
-        const pageNum = parseInt(page as string);
-        const limitNum = parseInt(limit as string);
-        const skip = (pageNum - 1) * limitNum;
+        // Pagination with safe parsing and limits
+        const { page: pageNum, limit: limitNum, skip } = parsePagination(
+            page as string,
+            limit as string,
+            100 // max limit
+        );
 
         // Get transactions
         const [transactions, total] = await Promise.all([
@@ -133,6 +138,18 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'Invalid transaction type' });
         }
 
+        // Validate amount
+        const parsedAmount = parseAmount(amount);
+        if (parsedAmount === null) {
+            return res.status(400).json({ error: 'Invalid amount: must be a positive number' });
+        }
+
+        // Validate date
+        const parsedDate = parseDateSafe(date);
+        if (!parsedDate) {
+            return res.status(400).json({ error: 'Invalid date format' });
+        }
+
         // Verify category exists
         const category = await prisma.category.findUnique({
             where: { id: categoryId }
@@ -147,11 +164,11 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
             data: {
                 userId,
                 type,
-                amount: parseFloat(amount),
+                amount: parsedAmount,
                 currency: 'COP',
                 categoryId,
                 description,
-                date: new Date(date),
+                date: parsedDate,
                 isRecurring: isRecurring || false,
                 recurringPattern: recurringPattern || null,
                 metadata: metadata || null,

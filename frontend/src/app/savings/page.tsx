@@ -3,13 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/Toast';
+import CurrencyInput from '@/components/CurrencyInput';
 
 export default function SavingsPage() {
     const router = useRouter();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [authLoading, setAuthLoading] = useState(true);
+    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { showToast } = useToast();
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingSaving, setEditingSaving] = useState<any>(null);
+    const [withdrawModal, setWithdrawModal] = useState<{ saving: any; amount: string } | null>(null);
     const [newSaving, setNewSaving] = useState({
         name: '',
         amount: '',
@@ -17,13 +21,10 @@ export default function SavingsPage() {
     });
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        setIsAuthenticated(!!token);
-        setAuthLoading(false);
-        if (!token) {
+        if (!authLoading && !isAuthenticated) {
             router.push('/login');
         }
-    }, [router]);
+    }, [authLoading, isAuthenticated, router]);
 
     const { data: savingsData, isLoading, refetch } = useQuery({
         queryKey: ['savings'],
@@ -56,7 +57,10 @@ export default function SavingsPage() {
             refetch();
             setShowAddForm(false);
             setNewSaving({ name: '', amount: '', purpose: '' });
-            alert('🏦 Ahorro registrado exitosamente!');
+            showToast('Ahorro registrado exitosamente', 'success');
+        },
+        onError: () => {
+            showToast('Error al registrar ahorro', 'error');
         },
     });
 
@@ -76,7 +80,10 @@ export default function SavingsPage() {
         onSuccess: () => {
             refetch();
             setEditingSaving(null);
-            alert('✏️ Ahorro actualizado!');
+            showToast('Ahorro actualizado correctamente', 'success');
+        },
+        onError: () => {
+            showToast('Error al actualizar ahorro', 'error');
         },
     });
 
@@ -93,7 +100,10 @@ export default function SavingsPage() {
         },
         onSuccess: () => {
             refetch();
-            alert('🗑️ Ahorro eliminado!');
+            showToast('Ahorro eliminado correctamente', 'success');
+        },
+        onError: () => {
+            showToast('Error al eliminar ahorro', 'error');
         },
     });
 
@@ -112,14 +122,25 @@ export default function SavingsPage() {
         },
         onSuccess: (data) => {
             refetch();
-            alert(`💰 Retiro exitoso! Ahora disponible: ${formatCOP(data.withdrawnAmount)}`);
+            setWithdrawModal(null);
+            showToast(`Retiro exitoso: ${formatCOP(data.withdrawnAmount)}`, 'success');
+        },
+        onError: () => {
+            showToast('Error al realizar retiro', 'error');
         },
     });
 
     const handleWithdraw = (saving: any) => {
-        const amount = prompt(`Monto a sacar (Disponible: $${parseFloat(saving.amount).toLocaleString('es-CO')})`);
-        if (amount && parseFloat(amount) > 0) {
-            withdrawMutation.mutate({ id: saving.id, amount: parseFloat(amount) });
+        setWithdrawModal({ saving, amount: '' });
+    };
+
+    const submitWithdraw = () => {
+        if (!withdrawModal) return;
+        const amount = parseFloat(withdrawModal.amount.replace(/\./g, ''));
+        if (amount > 0) {
+            withdrawMutation.mutate({ id: withdrawModal.saving.id, amount });
+        } else {
+            showToast('Ingresa un monto válido', 'warning');
         }
     };
 
@@ -294,6 +315,7 @@ export default function SavingsPage() {
                                                 })}
                                                 className="text-blue-600 hover:bg-blue-50 p-1 rounded text-sm"
                                                 title="Editar"
+                                                aria-label={`Editar ahorro ${saving.name}`}
                                             >
                                                 ✏️
                                             </button>
@@ -305,6 +327,7 @@ export default function SavingsPage() {
                                                 }}
                                                 className="text-red-600 hover:bg-red-50 p-1 rounded text-sm"
                                                 title="Eliminar"
+                                                aria-label={`Eliminar ahorro ${saving.name}`}
                                             >
                                                 🗑️
                                             </button>
@@ -338,6 +361,50 @@ export default function SavingsPage() {
                         Es tu dinero de emergencia o para proyectos específicos.
                     </p>
                 </div>
+
+                {/* Withdraw Modal */}
+                {withdrawModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" role="dialog" aria-labelledby="withdraw-modal-title">
+                            <h3 id="withdraw-modal-title" className="text-lg font-bold text-gray-900 mb-4">
+                                💸 Retirar de Ahorro
+                            </h3>
+                            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                                <p className="text-sm text-gray-600">Ahorro:</p>
+                                <p className="font-semibold text-gray-900">{withdrawModal.saving.name}</p>
+                                <p className="text-sm text-gray-600 mt-2">Disponible:</p>
+                                <p className="font-bold text-green-600">{formatCOP(parseFloat(withdrawModal.saving.amount))}</p>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Monto a retirar
+                                    </label>
+                                    <CurrencyInput
+                                        value={withdrawModal.amount}
+                                        onChange={(value) => setWithdrawModal({ ...withdrawModal, amount: value })}
+                                        placeholder="Ingrese el monto"
+                                    />
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                    <button
+                                        onClick={submitWithdraw}
+                                        disabled={!withdrawModal.amount || withdrawMutation.isPending}
+                                        className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50"
+                                    >
+                                        {withdrawMutation.isPending ? 'Procesando...' : 'Confirmar Retiro'}
+                                    </button>
+                                    <button
+                                        onClick={() => setWithdrawModal(null)}
+                                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg font-semibold"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/Toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
@@ -10,6 +11,7 @@ import Link from 'next/link';
 
 export default function ChecklistPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
+    const { showToast } = useToast();
     const router = useRouter();
     const queryClient = useQueryClient();
 
@@ -94,10 +96,10 @@ export default function ChecklistPage() {
             refetch();
             setShowAddForm(false);
             setNewItem({ name: '', amount: '', dueDay: '1', categoryId: '' });
-            alert('✅ Item guardado exitosamente!');
+            showToast('Item guardado exitosamente', 'success');
         },
         onError: (error: any) => {
-            alert(`❌ Error: ${error.message}`);
+            showToast(error.message || 'Error al guardar item', 'error');
         },
     });
 
@@ -117,10 +119,10 @@ export default function ChecklistPage() {
         },
         onSuccess: (data) => {
             refetch();
-            alert(`🗑️ Item eliminado desde ${data.deletedFrom} en adelante!`);
+            showToast(`Item eliminado desde ${data.deletedFrom}`, 'success');
         },
         onError: (error: any) => {
-            alert(`❌ Error: ${error.message}`);
+            showToast(error.message || 'Error al eliminar item', 'error');
         },
     });
 
@@ -150,10 +152,10 @@ export default function ChecklistPage() {
         onSuccess: () => {
             refetch();
             setEditingItem(null);
-            alert('✏️ Item actualizado exitosamente!');
+            showToast('Item actualizado exitosamente', 'success');
         },
         onError: (error: any) => {
-            alert(`❌ Error: ${error.message}`);
+            showToast(error.message || 'Error al actualizar item', 'error');
         },
     });
 

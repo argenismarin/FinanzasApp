@@ -306,13 +306,114 @@ export class NotificationService {
         }
     }
 
+    // Check checklist items that should be completed
+    static async checkChecklistReminders(userId: string) {
+        const now = new Date();
+        const currentDay = now.getDate();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const monthStart = new Date(currentYear, currentMonth, 1);
+        const monthEnd = new Date(currentYear, currentMonth + 1, 0);
+
+        // Get all active checklist items
+        const checklistItems = await prisma.checklistItem.findMany({
+            where: { userId, isActive: true },
+            include: { category: true }
+        });
+
+        // Get completions for current month
+        const completions = await prisma.checklistCompletion.findMany({
+            where: {
+                checklistItem: { userId },
+                month: {
+                    gte: monthStart,
+                    lte: monthEnd
+                }
+            }
+        });
+
+        const completedItemIds = new Set(completions.map(c => c.checklistItemId));
+
+        // Filter items that are past due and not completed
+        const overdueItems = checklistItems.filter(item =>
+            item.dueDay <= currentDay &&
+            !completedItemIds.has(item.id)
+        );
+
+        if (overdueItems.length > 0) {
+            // Check if we already sent a notification today
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const existing = await prisma.notification.findFirst({
+                where: {
+                    userId,
+                    type: 'PAYMENT_REMINDER',
+                    message: { contains: 'checklist' },
+                    createdAt: { gte: today }
+                }
+            });
+
+            if (!existing) {
+                const totalPending = overdueItems.reduce((sum, item) => sum + Number(item.amount), 0);
+                const itemNames = overdueItems.slice(0, 3).map(i => i.name).join(', ');
+                const moreText = overdueItems.length > 3 ? ` y ${overdueItems.length - 3} más` : '';
+
+                await this.create(
+                    userId,
+                    'PAYMENT_REMINDER',
+                    `✅ ${overdueItems.length} item${overdueItems.length > 1 ? 's' : ''} del checklist pendiente${overdueItems.length > 1 ? 's' : ''}`,
+                    `Tienes items vencidos sin marcar: ${itemNames}${moreText}. Total: $${totalPending.toLocaleString()}.`,
+                    {
+                        icon: '✅',
+                        link: '/checklist',
+                        priority: overdueItems.length >= 3 ? 'HIGH' : 'NORMAL'
+                    }
+                );
+            }
+        }
+
+        // Also alert if end of month is approaching and items are not complete
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const daysRemaining = daysInMonth - currentDay;
+
+        if (daysRemaining <= 5) {
+            const incompleteItems = checklistItems.filter(item => !completedItemIds.has(item.id));
+
+            if (incompleteItems.length > 0) {
+                const existing = await prisma.notification.findFirst({
+                    where: {
+                        userId,
+                        type: 'PAYMENT_REMINDER',
+                        message: { contains: 'fin de mes' },
+                        createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), currentDay - 3) }
+                    }
+                });
+
+                if (!existing) {
+                    const totalPending = incompleteItems.reduce((sum, item) => sum + Number(item.amount), 0);
+                    await this.create(
+                        userId,
+                        'PAYMENT_REMINDER',
+                        `⏰ ${incompleteItems.length} item${incompleteItems.length > 1 ? 's' : ''} sin completar`,
+                        `Quedan ${daysRemaining} días para fin de mes y tienes ${incompleteItems.length} item${incompleteItems.length > 1 ? 's' : ''} del checklist sin marcar. Total: $${totalPending.toLocaleString()}.`,
+                        {
+                            icon: '⏰',
+                            link: '/checklist',
+                            priority: 'HIGH'
+                        }
+                    );
+                }
+            }
+        }
+    }
+
     // Run all checks
     static async runAllChecks(userId: string) {
         await Promise.all([
             this.checkBudgetAlerts(userId),
             this.checkPaymentReminders(userId),
             this.checkGoalsProgress(userId),
-            this.checkUnusualSpending(userId)
+            this.checkUnusualSpending(userId),
+            this.checkChecklistReminders(userId)
         ]);
     }
 }
