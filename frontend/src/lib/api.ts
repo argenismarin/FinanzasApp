@@ -78,45 +78,41 @@ class ApiClient {
     }
 
     // Auth
-    async login(email: string, password?: string, name?: string) {
-        try {
-            const body: any = { email };
-            if (password) body.password = password;
-            if (name) body.name = name;
+    private async authRequest(endpoint: string, body: Record<string, string>) {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
 
-            const response = await fetch(`${API_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-
-            if (!response.ok) {
-                // Try to parse as JSON, fallback to text if it fails
-                let errorMessage = `Error al iniciar sesión (${response.status})`;
-                try {
-                    const contentType = response.headers.get('content-type');
-                    if (contentType && contentType.includes('application/json')) {
-                        const errorData = await response.json();
-                        errorMessage = errorData.error || errorData.message || errorMessage;
-                        console.error('Login error (JSON):', errorData);
-                    } else {
-                        const textError = await response.text();
-                        errorMessage = textError || errorMessage;
-                        console.error('Login error (Text):', textError);
-                    }
-                } catch (parseError) {
-                    console.error('Error parsing response:', parseError);
+        if (!response.ok) {
+            let errorMessage = `Error de autenticación (${response.status})`;
+            try {
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                } else {
+                    const textError = await response.text();
+                    errorMessage = textError || errorMessage;
                 }
-                throw new Error(errorMessage);
+            } catch (parseError) {
+                // Use default message
             }
-
-            const data = await response.json();
-            this.setToken(data.token);
-            return data;
-        } catch (error) {
-            console.error('Login exception:', error);
-            throw error;
+            throw new Error(errorMessage);
         }
+
+        const data = await response.json();
+        this.setToken(data.token);
+        return data;
+    }
+
+    async login(email: string, password: string) {
+        return this.authRequest('/auth/login', { email, password });
+    }
+
+    async register(email: string, password: string, name: string) {
+        return this.authRequest('/auth/register', { email, password, name });
     }
 
     async getMe() {
@@ -197,6 +193,18 @@ class ApiClient {
         return response.json();
     }
 
+    async getCreditCards() {
+        const response = await fetch(`${API_URL}/credit-cards`, {
+            headers: this.getHeaders(),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to get credit cards');
+        }
+
+        return response.json();
+    }
+
     async createTransaction(data: {
         type: string;
         amount: number;
@@ -206,6 +214,7 @@ class ApiClient {
         isRecurring?: boolean;
         recurringPattern?: any;
         metadata?: any;
+        creditCardId?: string;
     }) {
         const response = await fetch(`${API_URL}/transactions`, {
             method: 'POST',

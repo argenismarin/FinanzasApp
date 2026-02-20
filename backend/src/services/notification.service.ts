@@ -406,6 +406,38 @@ export class NotificationService {
         }
     }
 
+    // Check daily expense reminder
+    static async checkDailyExpenseReminder(userId: string) {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+        // Check if we already sent this reminder today
+        const existingReminder = await prisma.notification.findFirst({
+            where: {
+                userId,
+                type: 'SYSTEM',
+                message: { contains: 'registrar tus gastos' },
+                createdAt: { gte: todayStart, lt: todayEnd }
+            }
+        });
+
+        if (existingReminder) return;
+
+        // Create daily reminder notification
+        await this.create(
+            userId,
+            'SYSTEM',
+            '📝 Registra tus gastos del día',
+            'No olvides registrar tus gastos de hoy para mantener un mejor control de tus finanzas.',
+            {
+                icon: '📝',
+                link: '/transactions/new',
+                priority: 'LOW'
+            }
+        );
+    }
+
     // Run all checks
     static async runAllChecks(userId: string) {
         await Promise.all([
@@ -413,7 +445,8 @@ export class NotificationService {
             this.checkPaymentReminders(userId),
             this.checkGoalsProgress(userId),
             this.checkUnusualSpending(userId),
-            this.checkChecklistReminders(userId)
+            this.checkChecklistReminders(userId),
+            this.checkDailyExpenseReminder(userId)
         ]);
     }
 }

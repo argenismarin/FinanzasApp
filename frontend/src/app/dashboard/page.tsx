@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { formatCOP, parseDate } from '@/lib/utils';
+import { formatCOP, parseDate, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import {
     ComparisonWidget,
@@ -75,6 +75,13 @@ export default function DashboardPage() {
         enabled: isAuthenticated,
     });
 
+    const todayStr = getTodayString();
+    const { data: todayTransactions } = useQuery({
+        queryKey: ['today-transactions', todayStr],
+        queryFn: () => api.getTransactions({ startDate: todayStr, endDate: todayStr, limit: 1 }),
+        enabled: isAuthenticated,
+    });
+
     const { data: dashboardStats, isLoading: dashboardLoading } = useQuery({
         queryKey: ['dashboard-stats'],
         queryFn: async () => {
@@ -114,6 +121,31 @@ export default function DashboardPage() {
                 </div>
                 <NotificationCenter />
             </div>
+            {/* Daily Expense Reminder Banner */}
+            {todayTransactions && todayTransactions.data?.length === 0 && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                            <span className="text-2xl">📝</span>
+                            <div>
+                                <p className="font-semibold text-amber-800 dark:text-amber-200">
+                                    No has registrado gastos hoy
+                                </p>
+                                <p className="text-sm text-amber-700 dark:text-amber-300">
+                                    Registra tus transacciones diarias para un mejor control financiero
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            href="/transactions/new"
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg transition text-sm text-center whitespace-nowrap"
+                        >
+                            + Registrar Gasto
+                        </Link>
+                    </div>
+                </div>
+            )}
+
             {/* Balance Overview */}
             <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6 mb-6">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
@@ -338,7 +370,14 @@ function TransactionItem({ transaction }: { transaction: any }) {
                 <div className="text-lg sm:text-2xl md:text-3xl flex-shrink-0">{transaction.category.icon}</div>
                 <div className="min-w-0">
                     <p className="font-medium text-gray-900 dark:text-white text-xs sm:text-sm truncate">{transaction.description}</p>
-                    <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">{transaction.category.name}</p>
+                    <p className="text-[10px] sm:text-sm text-gray-500 dark:text-gray-400">
+                        {transaction.category.name}
+                        {transaction.creditCard && (
+                            <span className="ml-1 text-indigo-600 dark:text-indigo-400">
+                                · 💳 {transaction.creditCard.name} {transaction.creditCard.lastFourDigits ? `*${transaction.creditCard.lastFourDigits}` : ''}
+                            </span>
+                        )}
+                    </p>
                 </div>
             </div>
             <div className="text-right flex-shrink-0 ml-2">

@@ -352,6 +352,11 @@ function TransactionRow({
                         <span className="hidden sm:inline">•</span>
                         <span>{parseDate(transaction.date).toLocaleDateString('es-CO')}</span>
                     </div>
+                    {transaction.creditCard && (
+                        <span className="inline-flex items-center gap-1 mt-1 text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                            💳 {transaction.creditCard.name} {transaction.creditCard.lastFourDigits ? `*${transaction.creditCard.lastFourDigits}` : ''}
+                        </span>
+                    )}
                 </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">

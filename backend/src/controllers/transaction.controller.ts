@@ -58,6 +58,15 @@ export const getTransactions = async (req: AuthRequest, res: Response) => {
                             type: true
                         }
                     },
+                    creditCard: {
+                        select: {
+                            id: true,
+                            name: true,
+                            lastFourDigits: true,
+                            brand: true,
+                            color: true
+                        }
+                    },
                     user: {
                         select: {
                             id: true,
@@ -98,6 +107,15 @@ export const getTransaction = async (req: AuthRequest, res: Response) => {
             where: { id },
             include: {
                 category: true,
+                creditCard: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastFourDigits: true,
+                        brand: true,
+                        color: true
+                    }
+                },
                 user: {
                     select: {
                         id: true,
@@ -126,7 +144,7 @@ export const getTransaction = async (req: AuthRequest, res: Response) => {
 
 export const createTransaction = async (req: AuthRequest, res: Response) => {
     try {
-        const { type, amount, categoryId, description, date, isRecurring, recurringPattern, metadata } = req.body;
+        const { type, amount, categoryId, description, date, isRecurring, recurringPattern, metadata, creditCardId } = req.body;
         const userId = req.user!.id;
 
         // Validation
@@ -159,6 +177,20 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Category not found' });
         }
 
+        // Validate credit card if provided (only for EXPENSE)
+        let creditCard: any = null;
+        if (creditCardId) {
+            if (type !== 'EXPENSE') {
+                return res.status(400).json({ error: 'Credit card can only be linked to expense transactions' });
+            }
+            creditCard = await prisma.creditCard.findUnique({
+                where: { id: creditCardId }
+            });
+            if (!creditCard || creditCard.userId !== userId) {
+                return res.status(404).json({ error: 'Credit card not found' });
+            }
+        }
+
         // Create transaction
         const transaction = await prisma.transaction.create({
             data: {
@@ -172,10 +204,20 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
                 isRecurring: isRecurring || false,
                 recurringPattern: recurringPattern || null,
                 metadata: metadata || null,
-                createdBy: userId
+                createdBy: userId,
+                creditCardId: creditCardId || null
             },
             include: {
                 category: true,
+                creditCard: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastFourDigits: true,
+                        brand: true,
+                        color: true
+                    }
+                },
                 user: {
                     select: {
                         id: true,
@@ -185,6 +227,28 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
                 }
             }
         });
+
+        // If linked to credit card, create CreditCardTransaction and update balance
+        if (creditCard && creditCardId) {
+            const amountNum = Number(parsedAmount);
+            await prisma.creditCardTransaction.create({
+                data: {
+                    creditCardId,
+                    amount: parsedAmount,
+                    description,
+                    transactionDate: parsedDate,
+                    isPending: false
+                }
+            });
+
+            await prisma.creditCard.update({
+                where: { id: creditCardId },
+                data: {
+                    currentBalance: { increment: amountNum },
+                    availableCredit: { decrement: amountNum }
+                }
+            });
+        }
 
         res.status(201).json(transaction);
     } catch (error) {
@@ -264,6 +328,18 @@ export const deleteTransaction = async (req: AuthRequest, res: Response) => {
         // Check ownership
         if (userRole !== 'ADMIN' && transaction.userId !== userId) {
             return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        // If linked to credit card, revert the balance
+        if (transaction.creditCardId) {
+            const amountNum = Number(transaction.amount);
+            await prisma.creditCard.update({
+                where: { id: transaction.creditCardId },
+                data: {
+                    currentBalance: { decrement: amountNum },
+                    availableCredit: { increment: amountNum }
+                }
+            });
         }
 
         // Delete transaction
