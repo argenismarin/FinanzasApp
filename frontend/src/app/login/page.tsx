@@ -11,7 +11,7 @@ export default function LoginPage() {
     const [isSignup, setIsSignup] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { login } = useAuth();
+    const { login, register } = useAuth();
     const router = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -20,10 +20,14 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            await login(email, password, isSignup ? name : undefined);
+            if (isSignup) {
+                await register(email, password, name);
+            } else {
+                await login(email, password);
+            }
             router.push('/dashboard');
         } catch (err: any) {
-            setError(err.message || 'Error al iniciar sesión. Por favor intenta de nuevo.');
+            setError(err.message || 'Error al procesar la solicitud. Por favor intenta de nuevo.');
         } finally {
             setLoading(false);
         }
@@ -78,14 +82,14 @@ export default function LoginPage() {
 
                     <div>
                         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                            Contraseña {!isSignup && '(opcional)'}
+                            Contraseña
                         </label>
                         <input
                             id="password"
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            required={isSignup}
+                            required
                             autoComplete={isSignup ? 'new-password' : 'current-password'}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white text-gray-900"
                             placeholder="••••••••"
@@ -120,7 +124,7 @@ export default function LoginPage() {
                 </div>
 
                 <p className="text-center text-xs text-gray-500 mt-4">
-                    {isSignup ? 'Al crear una cuenta aceptas nuestros términos y condiciones' : 'Ingresa tu email para acceder'}
+                    {isSignup ? 'Al crear una cuenta aceptas nuestros términos y condiciones' : 'Ingresa tu email y contraseña para acceder'}
                 </p>
             </div>
         </div>
