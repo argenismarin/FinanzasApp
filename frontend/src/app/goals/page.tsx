@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import Link from 'next/link';
 
 export default function GoalsPage() {
@@ -22,23 +23,12 @@ export default function GoalsPage() {
 
     const { data: goals, isLoading } = useQuery({
         queryKey: ['goals'],
-        queryFn: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/goals`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        queryFn: () => api.getGoals(),
         enabled: isAuthenticated
     });
 
     const createMutation = useMutation({
-        mutationFn: (data: any) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/goals`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(data)
-        }).then(res => res.json()),
+        mutationFn: (data: any) => api.createGoal(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['goals'] });
             setShowModal(false);
@@ -48,14 +38,7 @@ export default function GoalsPage() {
 
     const contributeMutation = useMutation({
         mutationFn: ({ id, amount }: { id: string; amount: string }) =>
-            fetch(`${process.env.NEXT_PUBLIC_API_URL}/goals/${id}/contribute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ amount })
-            }).then(res => res.json()),
+            api.contributeToGoal(id, { amount }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['goals'] });
             setShowContributeModal(false);
@@ -64,12 +47,7 @@ export default function GoalsPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: string) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/goals/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }),
+        mutationFn: (id: string) => api.deleteGoal(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['goals'] });
         }

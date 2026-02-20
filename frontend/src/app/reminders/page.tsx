@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import Link from 'next/link';
 
 export default function RemindersPage() {
@@ -21,33 +22,18 @@ export default function RemindersPage() {
 
     const { data: reminders, isLoading } = useQuery({
         queryKey: ['reminders'],
-        queryFn: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/reminders`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        queryFn: () => api.getReminders(),
         enabled: isAuthenticated
     });
 
     const { data: categories } = useQuery({
         queryKey: ['categories'],
-        queryFn: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/categories`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        queryFn: () => api.getCategories(),
         enabled: isAuthenticated
     });
 
     const createMutation = useMutation({
-        mutationFn: (data: any) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/reminders`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(data)
-        }).then(res => res.json()),
+        mutationFn: (data: any) => api.createReminder(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reminders'] });
             setShowModal(false);
@@ -56,24 +42,14 @@ export default function RemindersPage() {
     });
 
     const markPaidMutation = useMutation({
-        mutationFn: (id: string) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/reminders/${id}/mark-paid`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        mutationFn: (id: string) => api.markReminderPaid(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reminders'] });
         }
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: string) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/reminders/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }),
+        mutationFn: (id: string) => api.deleteReminder(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reminders'] });
         }

@@ -35,18 +35,7 @@ export default function ChecklistPage() {
 
     const { data: checklistData, isLoading, refetch } = useQuery({
         queryKey: ['checklist', selectedMonth, selectedYear],
-        queryFn: async () => {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/checklist?month=${selectedMonth}&year=${selectedYear}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
-            );
-            if (!response.ok) throw new Error('Failed to fetch checklist');
-            return response.json();
-        },
+        queryFn: () => api.getChecklistItems(selectedMonth, selectedYear),
         enabled: isAuthenticated,
     });
 
@@ -57,41 +46,14 @@ export default function ChecklistPage() {
     });
 
     const toggleMutation = useMutation({
-        mutationFn: async (itemId: string) => {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}/toggle?month=${selectedMonth}&year=${selectedYear}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
-            );
-            if (!response.ok) throw new Error('Failed to toggle item');
-            return response.json();
-        },
+        mutationFn: (itemId: string) => api.toggleChecklistItem(itemId, selectedMonth, selectedYear),
         onSuccess: () => {
             refetch();
         },
     });
 
     const createMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/checklist`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to create item');
-            }
-            return response.json();
-        },
+        mutationFn: (data: any) => api.createChecklistItem(data),
         onSuccess: () => {
             refetch();
             setShowAddForm(false);
@@ -104,20 +66,8 @@ export default function ChecklistPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: async (itemId: string) => {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/checklist/${itemId}?month=${selectedMonth}&year=${selectedYear}`,
-                {
-                    method: 'DELETE',
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
-            );
-            if (!response.ok) throw new Error('Failed to delete item');
-            return response.json();
-        },
-        onSuccess: (data) => {
+        mutationFn: (itemId: string) => api.deleteChecklistItem(itemId, selectedMonth, selectedYear),
+        onSuccess: (data: any) => {
             refetch();
             showToast(`Item eliminado desde ${data.deletedFrom}`, 'success');
         },
@@ -137,18 +87,7 @@ export default function ChecklistPage() {
     };
 
     const updateMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: any }) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/checklist/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) throw new Error('Failed to update item');
-            return response.json();
-        },
+        mutationFn: ({ id, data }: { id: string; data: any }) => api.updateChecklistItem(id, data),
         onSuccess: () => {
             refetch();
             setEditingItem(null);

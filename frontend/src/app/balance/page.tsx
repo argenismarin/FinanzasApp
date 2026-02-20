@@ -3,35 +3,25 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
 export default function BalancePage() {
     const router = useRouter();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [authLoading, setAuthLoading] = useState(true);
+    const { isAuthenticated, loading: authLoading } = useAuth();
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        setIsAuthenticated(!!token);
-        setAuthLoading(false);
-        if (!token) {
+        if (!authLoading && !isAuthenticated) {
             router.push('/login');
         }
-    }, [router]);
+    }, [authLoading, isAuthenticated, router]);
 
     const { data: balanceData, isLoading } = useQuery({
         queryKey: ['balance'],
-        queryFn: async () => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/balance`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to fetch balance');
-            return response.json();
-        },
+        queryFn: () => api.getBalance(),
         enabled: isAuthenticated,
     });
 

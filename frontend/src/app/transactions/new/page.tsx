@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +25,29 @@ export default function NewTransactionPage() {
         creditCardId: '',
     });
 
+    const [categorySuggestion, setCategorySuggestion] = useState<any>(null);
+    const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Auto-suggest category based on description
+    useEffect(() => {
+        if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current);
+        if (formData.description.length < 3 || formData.categoryId) {
+            setCategorySuggestion(null);
+            return;
+        }
+        suggestTimeoutRef.current = setTimeout(async () => {
+            try {
+                const result = await api.suggestCategory(formData.description, formData.type);
+                if (result.suggestion && !formData.categoryId) {
+                    setCategorySuggestion(result.suggestion);
+                }
+            } catch {
+                // ignore
+            }
+        }, 500);
+        return () => { if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current); };
+    }, [formData.description, formData.categoryId, formData.type]);
+
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
             router.push('/login');
@@ -47,15 +70,7 @@ export default function NewTransactionPage() {
     // Fetch budgets for real-time alerts
     const { data: budgets } = useQuery({
         queryKey: ['budgets'],
-        queryFn: async () => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/budgets`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to fetch budgets');
-            return response.json();
-        },
+        queryFn: () => api.getBudgets(),
         enabled: isAuthenticated && formData.type === 'EXPENSE',
     });
 
@@ -314,6 +329,19 @@ export default function NewTransactionPage() {
                                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 placeholder="Ej: Mercado del mes"
                             />
+                            {categorySuggestion && !formData.categoryId && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData({ ...formData, categoryId: categorySuggestion.categoryId });
+                                        setCategorySuggestion(null);
+                                    }}
+                                    className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-full text-sm text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition"
+                                >
+                                    🤖 Sugerencia: {categorySuggestion.category?.icon} {categorySuggestion.category?.name}
+                                    <span className="font-semibold text-purple-600 dark:text-purple-400">[Usar]</span>
+                                </button>
+                            )}
                         </div>
 
                         {/* Date */}

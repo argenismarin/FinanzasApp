@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/Toast';
+import { api } from '@/lib/api';
 import { formatCOP, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface Account {
     id: string;
@@ -54,46 +53,20 @@ export default function TransfersPage() {
     // Fetch accounts
     const { data: accounts, isLoading: accountsLoading } = useQuery<Account[]>({
         queryKey: ['transfer-accounts'],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/transfers/accounts`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        queryFn: () => api.getAccountsForTransfer(),
         enabled: isAuthenticated
     });
 
     // Fetch transfers
     const { data: transfers, isLoading: transfersLoading } = useQuery<Transfer[]>({
         queryKey: ['transfers'],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/transfers`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        queryFn: () => api.getTransfers(),
         enabled: isAuthenticated
     });
 
     // Create transfer mutation
     const createMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const response = await fetch(`${API_URL}/transfers`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Error');
-            }
-            return response.json();
-        },
+        mutationFn: (data: any) => api.createTransfer(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transfers'] });
             queryClient.invalidateQueries({ queryKey: ['transfer-accounts'] });
@@ -115,14 +88,7 @@ export default function TransfersPage() {
 
     // Delete transfer mutation
     const deleteMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const response = await fetch(`${API_URL}/transfers/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        mutationFn: (id: string) => api.deleteTransfer(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transfers'] });
             queryClient.invalidateQueries({ queryKey: ['transfer-accounts'] });

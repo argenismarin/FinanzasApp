@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -30,23 +31,12 @@ export default function AccountsPage() {
 
     const { data: accounts, isLoading } = useQuery({
         queryKey: ['accounts'],
-        queryFn: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        queryFn: () => api.getAccounts(),
         enabled: isAuthenticated
     });
 
     const createMutation = useMutation({
-        mutationFn: (data: any) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(data)
-        }).then(res => res.json()),
+        mutationFn: (data: any) => api.createAccount(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
             setShowCreateModal(false);
@@ -55,14 +45,7 @@ export default function AccountsPage() {
     });
 
     const transferMutation = useMutation({
-        mutationFn: (data: any) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts/transfer`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(data)
-        }).then(res => res.json()),
+        mutationFn: (data: any) => api.createTransfer(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
             setShowTransferModal(false);
@@ -71,12 +54,7 @@ export default function AccountsPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: string) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }),
+        mutationFn: (id: string) => api.deleteAccount(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
         }

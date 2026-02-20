@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
+import { api } from '@/lib/api';
 import CurrencyInput from '@/components/CurrencyInput';
 
 export default function SavingsPage() {
@@ -28,31 +29,12 @@ export default function SavingsPage() {
 
     const { data: savingsData, isLoading, refetch } = useQuery({
         queryKey: ['savings'],
-        queryFn: async () => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/savings`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to fetch savings');
-            return response.json();
-        },
+        queryFn: () => api.getSavings(),
         enabled: isAuthenticated,
     });
 
     const createMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/savings`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) throw new Error('Failed to create saving');
-            return response.json();
-        },
+        mutationFn: (data: any) => api.createSaving(data),
         onSuccess: () => {
             refetch();
             setShowAddForm(false);
@@ -65,18 +47,7 @@ export default function SavingsPage() {
     });
 
     const updateMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: any }) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/savings/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) throw new Error('Failed to update saving');
-            return response.json();
-        },
+        mutationFn: ({ id, data }: { id: string; data: any }) => api.updateSaving(id, data),
         onSuccess: () => {
             refetch();
             setEditingSaving(null);
@@ -88,16 +59,7 @@ export default function SavingsPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/savings/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to delete saving');
-            return response.json();
-        },
+        mutationFn: (id: string) => api.deleteSaving(id),
         onSuccess: () => {
             refetch();
             showToast('Ahorro eliminado correctamente', 'success');
@@ -108,18 +70,7 @@ export default function SavingsPage() {
     });
 
     const withdrawMutation = useMutation({
-        mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/savings/${id}/withdraw`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify({ amount }),
-            });
-            if (!response.ok) throw new Error('Failed to withdraw');
-            return response.json();
-        },
+        mutationFn: ({ id, amount }: { id: string; amount: number }) => api.withdrawFromSaving(id, { amount }),
         onSuccess: (data) => {
             refetch();
             setWithdrawModal(null);

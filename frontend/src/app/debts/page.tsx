@@ -7,6 +7,7 @@ import ExportMenu from '@/components/ExportMenu';
 import CurrencyInput from '@/components/CurrencyInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
+import { api } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -35,31 +36,12 @@ export default function DebtsPage() {
 
     const { data: debtsData, isLoading, refetch } = useQuery({
         queryKey: ['debts'],
-        queryFn: async () => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/debts`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to fetch debts');
-            return response.json();
-        },
+        queryFn: () => api.getDebts(),
         enabled: isAuthenticated,
     });
 
     const createMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/debts`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) throw new Error('Failed to create debt');
-            return response.json();
-        },
+        mutationFn: (data: any) => api.createDebt(data),
         onSuccess: () => {
             refetch();
             setShowAddForm(false);
@@ -72,18 +54,7 @@ export default function DebtsPage() {
     });
 
     const updateMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: any }) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/debts/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify(data),
-            });
-            if (!response.ok) throw new Error('Failed to update debt');
-            return response.json();
-        },
+        mutationFn: ({ id, data }: { id: string; data: any }) => api.updateDebt(id, data),
         onSuccess: () => {
             refetch();
             setEditingDebt(null);
@@ -95,18 +66,8 @@ export default function DebtsPage() {
     });
 
     const payMutation = useMutation({
-        mutationFn: async ({ id, amount, description }: { id: string; amount: number; description?: string }) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/debts/${id}/pay`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: JSON.stringify({ amount, description }),
-            });
-            if (!response.ok) throw new Error('Failed to register payment');
-            return response.json();
-        },
+        mutationFn: ({ id, amount, description }: { id: string; amount: number; description?: string }) =>
+            api.payDebt(id, { amount, description }),
         onSuccess: (data) => {
             refetch();
             setPaymentModal(null);
@@ -118,16 +79,7 @@ export default function DebtsPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/debts/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to delete debt');
-            return response.json();
-        },
+        mutationFn: (id: string) => api.deleteDebt(id),
         onSuccess: () => {
             refetch();
             showToast('Deuda eliminada correctamente', 'success');

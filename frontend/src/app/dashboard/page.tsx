@@ -18,6 +18,7 @@ import {
     ChecklistProgressWidget
 } from '@/components/DashboardWidgets';
 import NotificationCenter from '@/components/NotificationCenter';
+import ForecastWidget from '@/components/ForecastWidget';
 
 export default function DashboardPage() {
     const { user, loading: authLoading, isAuthenticated } = useAuth();
@@ -33,19 +34,9 @@ export default function DashboardPage() {
     // Run notification checks on dashboard load
     useEffect(() => {
         if (isAuthenticated) {
-            const runChecks = async () => {
-                try {
-                    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/run-checks`, {
-                        method: 'POST',
-                        headers: {
-                            Authorization: `Bearer ${localStorage.getItem('token')}`,
-                        },
-                    });
-                } catch (error) {
-                    console.error('Failed to run notification checks:', error);
-                }
-            };
-            runChecks();
+            api.runNotificationChecks().catch((error) => {
+                console.error('Failed to run notification checks:', error);
+            });
         }
     }, [isAuthenticated]);
 
@@ -57,15 +48,7 @@ export default function DashboardPage() {
 
     const { data: balance, isLoading: balanceLoading } = useQuery({
         queryKey: ['balance'],
-        queryFn: async () => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/balance`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to fetch balance');
-            return response.json();
-        },
+        queryFn: () => api.getBalance(),
         enabled: isAuthenticated,
     });
 
@@ -82,17 +65,15 @@ export default function DashboardPage() {
         enabled: isAuthenticated,
     });
 
+    const { data: forecastData } = useQuery({
+        queryKey: ['forecast'],
+        queryFn: () => api.getForecast(),
+        enabled: isAuthenticated,
+    });
+
     const { data: dashboardStats, isLoading: dashboardLoading } = useQuery({
         queryKey: ['dashboard-stats'],
-        queryFn: async () => {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/analytics/dashboard`, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`,
-                },
-            });
-            if (!response.ok) throw new Error('Failed to fetch dashboard stats');
-            return response.json();
-        },
+        queryFn: () => api.getDashboardStats(),
         enabled: isAuthenticated,
     });
 
@@ -257,6 +238,13 @@ export default function DashboardPage() {
                             type="balance"
                         />
                     </div>
+            )}
+
+            {/* Forecast Widget */}
+            {forecastData && (
+                <div className="mb-6">
+                    <ForecastWidget data={forecastData} />
+                </div>
             )}
 
             {/* Budget Alerts - Full Width if exists */}

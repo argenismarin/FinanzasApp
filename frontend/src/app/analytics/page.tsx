@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
 import ExportMenu from '@/components/ExportMenu';
@@ -38,16 +39,7 @@ export default function AnalyticsPage() {
     const { data: trendData, isLoading: trendLoading } = useQuery({
         queryKey: ['monthly-trend', months],
         queryFn: async () => {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/analytics/overview`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
-            );
-            if (!response.ok) return { monthlyTrends: [] };
-            const data = await response.json();
+            const data = await api.getAnalyticsOverview();
             return data.monthlyTrends || [];
         },
         enabled: isAuthenticated,
@@ -56,16 +48,7 @@ export default function AnalyticsPage() {
     const { data: categoryData, isLoading: categoryLoading } = useQuery({
         queryKey: ['category-breakdown', categoryType],
         queryFn: async () => {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/analytics/categories?type=${categoryType}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
-            );
-            if (!response.ok) return { breakdown: [] };
-            const data = await response.json();
+            const data = await api.getCategoryBreakdown({ type: categoryType });
             return { breakdown: data };
         },
         enabled: isAuthenticated,
@@ -73,18 +56,7 @@ export default function AnalyticsPage() {
 
     const { data: topCategories, isLoading: topLoading } = useQuery({
         queryKey: ['top-categories', categoryType],
-        queryFn: async () => {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/analytics/top-categories?limit=5&type=${categoryType}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`,
-                    },
-                }
-            );
-            if (!response.ok) return [];
-            return response.json();
-        },
+        queryFn: () => api.getTopCategories({ limit: 5, type: categoryType }),
         enabled: isAuthenticated,
     });
 

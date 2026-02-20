@@ -24,33 +24,18 @@ export default function BudgetsPage() {
 
     const { data: budgets, isLoading } = useQuery({
         queryKey: ['budgets-progress'],
-        queryFn: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/budgets/progress`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        queryFn: () => api.getBudgetProgress(),
         enabled: isAuthenticated
     });
 
     const { data: categories } = useQuery({
         queryKey: ['categories'],
-        queryFn: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/categories`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }).then(res => res.json()),
+        queryFn: () => api.getCategories(),
         enabled: isAuthenticated
     });
 
     const createMutation = useMutation({
-        mutationFn: (data: any) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/budgets`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(data)
-        }).then(res => res.json()),
+        mutationFn: (data: any) => api.createBudget(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
             setShowModal(false);
@@ -63,12 +48,7 @@ export default function BudgetsPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: string) => fetch(`${process.env.NEXT_PUBLIC_API_URL}/budgets/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        }),
+        mutationFn: (id: string) => api.deleteBudget(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
             showToast('Presupuesto eliminado', 'success');

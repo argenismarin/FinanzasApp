@@ -6,10 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/Toast';
 import { formatCOP, getTodayString } from '@/lib/utils';
+import { api } from '@/lib/api';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface RecurringTransaction {
     id: string;
@@ -83,56 +82,27 @@ export default function RecurringTransactionsPage() {
     // Fetch recurring transactions
     const { data: recurring, isLoading } = useQuery<RecurringTransaction[]>({
         queryKey: ['recurring-transactions'],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/recurring`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        queryFn: () => api.getRecurringTransactions(),
         enabled: isAuthenticated
     });
 
     // Fetch pending
     const { data: pending } = useQuery<RecurringTransaction[]>({
         queryKey: ['recurring-pending'],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/recurring/pending`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        queryFn: () => api.getPendingRecurring(),
         enabled: isAuthenticated
     });
 
     // Fetch categories
     const { data: categories } = useQuery<Category[]>({
         queryKey: ['categories', formData.type],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/categories?type=${formData.type}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        queryFn: () => api.getCategories(formData.type),
         enabled: isAuthenticated
     });
 
     // Create mutation
     const createMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const response = await fetch(`${API_URL}/recurring`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        mutationFn: (data: any) => api.createRecurringTransaction(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
             queryClient.invalidateQueries({ queryKey: ['recurring-pending'] });
@@ -145,14 +115,7 @@ export default function RecurringTransactionsPage() {
 
     // Execute mutation
     const executeMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const response = await fetch(`${API_URL}/recurring/${id}/execute`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        mutationFn: (id: string) => api.executeRecurringTransaction(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
             queryClient.invalidateQueries({ queryKey: ['recurring-pending'] });
@@ -164,14 +127,7 @@ export default function RecurringTransactionsPage() {
 
     // Execute all pending
     const executeAllMutation = useMutation({
-        mutationFn: async () => {
-            const response = await fetch(`${API_URL}/recurring/execute-all`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        mutationFn: () => api.executeAllPending(),
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
             queryClient.invalidateQueries({ queryKey: ['recurring-pending'] });
@@ -183,14 +139,7 @@ export default function RecurringTransactionsPage() {
 
     // Delete mutation
     const deleteMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const response = await fetch(`${API_URL}/recurring/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error');
-            return response.json();
-        },
+        mutationFn: (id: string) => api.deleteRecurringTransaction(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
             showToast('Transacción eliminada', 'success');

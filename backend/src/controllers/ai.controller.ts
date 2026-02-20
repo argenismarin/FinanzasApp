@@ -1,12 +1,10 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import {
     getFinancialAdvice,
     analyzeSpendingPatterns,
     suggestBudget
 } from '../services/openai.service';
-
-const prisma = new PrismaClient();
 
 interface AuthRequest extends Request {
     user?: {

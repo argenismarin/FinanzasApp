@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/Toast';
+import { api } from '@/lib/api';
 import { formatCOP, getTodayString } from '@/lib/utils';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
@@ -12,8 +13,6 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface CreditCard {
     id: string;
@@ -136,43 +135,20 @@ export default function CreditCardsPage() {
     // Fetch credit cards
     const { data: cards, isLoading: cardsLoading } = useQuery<CreditCard[]>({
         queryKey: ['credit-cards'],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/credit-cards`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error al obtener tarjetas');
-            return response.json();
-        },
+        queryFn: () => api.getCreditCards(),
         enabled: isAuthenticated
     });
 
     // Fetch summary
     const { data: summary } = useQuery<CardsSummary>({
         queryKey: ['credit-cards-summary'],
-        queryFn: async () => {
-            const response = await fetch(`${API_URL}/credit-cards/summary`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error al obtener resumen');
-            return response.json();
-        },
+        queryFn: () => api.getCreditCardsSummary(),
         enabled: isAuthenticated
     });
 
     // Create card mutation
     const createCardMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const response = await fetch(`${API_URL}/credit-cards`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error('Error al crear tarjeta');
-            return response.json();
-        },
+        mutationFn: (data: any) => api.createCreditCard(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
@@ -188,18 +164,7 @@ export default function CreditCardsPage() {
 
     // Add transaction mutation
     const addTransactionMutation = useMutation({
-        mutationFn: async ({ cardId, data }: { cardId: string; data: any }) => {
-            const response = await fetch(`${API_URL}/credit-cards/${cardId}/transactions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error('Error al agregar transacción');
-            return response.json();
-        },
+        mutationFn: ({ cardId, data }: { cardId: string; data: any }) => api.addCreditCardTransaction(cardId, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
@@ -216,18 +181,7 @@ export default function CreditCardsPage() {
 
     // Add payment mutation
     const addPaymentMutation = useMutation({
-        mutationFn: async ({ cardId, data }: { cardId: string; data: any }) => {
-            const response = await fetch(`${API_URL}/credit-cards/${cardId}/payments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error('Error al registrar pago');
-            return response.json();
-        },
+        mutationFn: ({ cardId, data }: { cardId: string; data: any }) => api.addCreditCardPayment(cardId, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
@@ -244,14 +198,7 @@ export default function CreditCardsPage() {
 
     // Delete card mutation
     const deleteCardMutation = useMutation({
-        mutationFn: async (cardId: string) => {
-            const response = await fetch(`${API_URL}/credit-cards/${cardId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            if (!response.ok) throw new Error('Error al eliminar tarjeta');
-            return response.json();
-        },
+        mutationFn: (cardId: string) => api.deleteCreditCard(cardId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
