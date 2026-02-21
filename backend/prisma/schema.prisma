@@ -36,6 +36,7 @@ model User {
   savingsGoals          SavingsGoal[]
   createdTransactions   Transaction[]          @relation("CreatedBy")
   transactions          Transaction[]
+  categorizationRules   CategorizationRule[]
 
   @@map("users")
 }
@@ -93,8 +94,9 @@ model Category {
   budgets          Budget[]
   user             User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   checklistItems   ChecklistItem[]
-  paymentReminders PaymentReminder[]
-  transactions     Transaction[]
+  paymentReminders     PaymentReminder[]
+  transactions         Transaction[]
+  categorizationRules  CategorizationRule[]
 
   @@index([userId])
   @@map("categories")
@@ -509,4 +511,28 @@ enum AppChecklist_tasks_priority {
   low
   medium
   high
+}
+
+enum RuleMatchType {
+  CONTAINS
+  STARTS_WITH
+  EXACT
+}
+
+model CategorizationRule {
+  id         String        @id @default(uuid())
+  userId     String        @map("user_id")
+  categoryId String        @map("category_id")
+  pattern    String
+  matchType  RuleMatchType @default(CONTAINS) @map("match_type")
+  priority   Int           @default(0)
+  isActive   Boolean       @default(true) @map("is_active")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  category   Category      @relation(fields: [categoryId], references: [id])
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isActive], map: "categorization_rules_user_active_idx")
+  @@map("categorization_rules")
 }
