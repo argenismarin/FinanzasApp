@@ -18,6 +18,11 @@ export const metadata: Metadata = {
             { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
         ],
     },
+    appleWebApp: {
+        capable: true,
+        title: 'FinanzasApp',
+        statusBarStyle: 'default',
+    },
     openGraph: {
         title: 'FinanzasApp - Gestión de Finanzas Personales',
         description: 'Gestión inteligente de tus finanzas personales con OCR de facturas, analítica avanzada y sincronización en la nube',
@@ -40,10 +45,8 @@ export const metadata: Metadata = {
         description: 'Gestión inteligente de tus finanzas personales',
         images: ['/icon-192.png'],
     },
-    appleWebApp: {
-        capable: true,
-        statusBarStyle: 'default',
-        title: 'FinanzasApp',
+    other: {
+        'mobile-web-app-capable': 'yes',
     },
     formatDetection: {
         telephone: false,

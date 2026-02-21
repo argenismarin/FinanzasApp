@@ -377,6 +377,136 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// Get expense forecast
+export const getForecast = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const daysInMonth = currentMonthEnd.getDate();
+        const daysElapsed = now.getDate();
+        const daysRemaining = daysInMonth - daysElapsed;
+
+        // Current month expenses
+        const currentExpenses = await prisma.transaction.findMany({
+            where: {
+                userId,
+                type: 'EXPENSE',
+                date: { gte: currentMonthStart, lte: currentMonthEnd }
+            },
+            include: { category: true }
+        });
+
+        const currentSpent = currentExpenses.reduce((sum, t) => sum + Number(t.amount), 0);
+        const avgDaily = daysElapsed > 0 ? currentSpent / daysElapsed : 0;
+        const projected = avgDaily * daysInMonth;
+
+        // Historical data (last 6 months)
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+        const historicalExpenses = await prisma.transaction.findMany({
+            where: {
+                userId,
+                type: 'EXPENSE',
+                date: { gte: sixMonthsAgo, lte: lastMonthEnd }
+            },
+            include: { category: true }
+        });
+
+        // Group historical by month
+        const monthlyTotals: { [key: string]: number } = {};
+        historicalExpenses.forEach(t => {
+            const key = t.date.toISOString().substring(0, 7);
+            monthlyTotals[key] = (monthlyTotals[key] || 0) + Number(t.amount);
+        });
+
+        const months = Object.entries(monthlyTotals)
+            .map(([month, total]) => ({ month, total }))
+            .sort((a, b) => a.month.localeCompare(b.month));
+
+        // Weighted average (more recent months weighted higher)
+        let weightedSum = 0;
+        let weightTotal = 0;
+        months.forEach((m, i) => {
+            const weight = i + 1;
+            weightedSum += m.total * weight;
+            weightTotal += weight;
+        });
+        const weightedAvg = weightTotal > 0 ? weightedSum / weightTotal : 0;
+
+        const pctDiff = weightedAvg > 0 ? ((projected - weightedAvg) / weightedAvg) * 100 : 0;
+
+        // Category forecasts
+        const categorySpent: { [catId: string]: { name: string; icon: string; spent: number } } = {};
+        currentExpenses.forEach(t => {
+            const catId = t.categoryId;
+            if (!categorySpent[catId]) {
+                categorySpent[catId] = { name: t.category.name, icon: t.category.icon, spent: 0 };
+            }
+            categorySpent[catId].spent += Number(t.amount);
+        });
+
+        // Group by category+month for historical averages
+        const catMonthTotals: { [key: string]: number } = {};
+        historicalExpenses.forEach(t => {
+            const key = `${t.categoryId}|${t.date.toISOString().substring(0, 7)}`;
+            catMonthTotals[key] = (catMonthTotals[key] || 0) + Number(t.amount);
+        });
+
+        const catAvgs: { [catId: string]: number } = {};
+        const catMonthCounts: { [catId: string]: number } = {};
+        Object.entries(catMonthTotals).forEach(([key, total]) => {
+            const catId = key.split('|')[0];
+            catAvgs[catId] = (catAvgs[catId] || 0) + total;
+            catMonthCounts[catId] = (catMonthCounts[catId] || 0) + 1;
+        });
+        Object.keys(catAvgs).forEach(catId => {
+            catAvgs[catId] = catAvgs[catId] / Math.max(catMonthCounts[catId], 1);
+        });
+
+        const categoryForecasts = Object.entries(categorySpent)
+            .map(([catId, data]) => {
+                const projectedCat = daysElapsed > 0 ? (data.spent / daysElapsed) * daysInMonth : 0;
+                const historicalAvg = catAvgs[catId] || 0;
+                const trend = historicalAvg > 0 ? ((projectedCat - historicalAvg) / historicalAvg) * 100 : 0;
+                return {
+                    name: data.name,
+                    icon: data.icon,
+                    spent: data.spent,
+                    projected: projectedCat,
+                    historicalAvg,
+                    trend: Math.round(trend)
+                };
+            })
+            .sort((a, b) => b.spent - a.spent);
+
+        res.json({
+            currentMonth: {
+                spent: currentSpent,
+                avgDaily,
+                projected,
+                daysElapsed,
+                daysRemaining,
+                daysInMonth
+            },
+            historical: {
+                weightedAvg,
+                months
+            },
+            comparison: {
+                pctDiff: Math.round(pctDiff),
+                isAboveAvg: projected > weightedAvg
+            },
+            categoryForecasts
+        });
+    } catch (error) {
+        console.error('Get forecast error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // Get financial report for a period
 export const getFinancialReport = async (req: AuthRequest, res: Response) => {
     try {
