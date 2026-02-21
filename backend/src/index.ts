@@ -25,6 +25,7 @@ import aiRoutes from './routes/ai.routes';
 import creditCardRoutes from './routes/credit-cards.routes';
 import recurringRoutes from './routes/recurring.routes';
 import transferRoutes from './routes/transfer.routes';
+import categorizationRuleRoutes from './routes/categorization-rule.routes';
 
 // Load environment variables
 dotenv.config();
@@ -38,7 +39,7 @@ app.use(helmet());
 app.use(cors({
     origin: true, // Allow all origins temporarily
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
@@ -189,6 +190,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/credit-cards', creditCardRoutes);
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/transfers', transferRoutes);
+app.use('/api/categorization-rules', categorizationRuleRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
