@@ -213,9 +213,9 @@ export default function AccountsPage() {
                             onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
                             required
                             min="0"
-                            step="1000"
+                            step="1"
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
-                            placeholder="1000000"
+                            placeholder="21250"
                         />
                     </div>
 
@@ -296,9 +296,9 @@ export default function AccountsPage() {
                             onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
                             required
                             min="0"
-                            step="1000"
+                            step="1"
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
-                            placeholder="100000"
+                            placeholder="50000"
                         />
                     </div>
 
