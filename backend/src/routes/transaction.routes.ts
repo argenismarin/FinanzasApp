@@ -5,7 +5,8 @@ import {
     createTransaction,
     updateTransaction,
     deleteTransaction,
-    getTransactionStats
+    getTransactionStats,
+    bulkCreateTransactions
 } from '../controllers/transaction.controller';
 import { authenticate } from '../middleware/auth';
 
@@ -16,6 +17,7 @@ router.use(authenticate);
 
 router.get('/', getTransactions);
 router.get('/stats', getTransactionStats);
+router.post('/bulk', bulkCreateTransactions);
 router.get('/:id', getTransaction);
 router.post('/', createTransaction);
 router.put('/:id', updateTransaction);

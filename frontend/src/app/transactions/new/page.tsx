@@ -23,7 +23,9 @@ export default function NewTransactionPage() {
         date: getTodayString(),
         tags: [] as string[],
         creditCardId: '',
+        accountId: '',
     });
+    const [paymentSource, setPaymentSource] = useState<'account' | 'creditCard'>('account');
 
     const [categorySuggestion, setCategorySuggestion] = useState<any>(null);
     const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,6 +61,22 @@ export default function NewTransactionPage() {
         queryFn: () => api.getCategories(formData.type),
         enabled: isAuthenticated,
     });
+
+    // Fetch bank accounts
+    const { data: accounts } = useQuery({
+        queryKey: ['accounts'],
+        queryFn: () => api.getAccounts(),
+        enabled: isAuthenticated,
+    });
+
+    // Auto-select "General" account when accounts load
+    useEffect(() => {
+        if (accounts && accounts.length > 0 && !formData.accountId && paymentSource === 'account') {
+            const generalAccount = accounts.find((a: any) => a.name === 'General');
+            const defaultAccount = generalAccount || accounts[0];
+            setFormData(prev => ({ ...prev, accountId: defaultAccount.id }));
+        }
+    }, [accounts]);
 
     // Fetch credit cards for expense transactions
     const { data: creditCards } = useQuery({
@@ -106,6 +124,7 @@ export default function NewTransactionPage() {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
             router.push('/transactions');
         },
     });
@@ -116,7 +135,8 @@ export default function NewTransactionPage() {
             ...formData,
             amount: parseFloat(formData.amount),
             tags: formData.tags.length > 0 ? formData.tags : undefined,
-            creditCardId: formData.creditCardId || undefined,
+            creditCardId: paymentSource === 'creditCard' ? (formData.creditCardId || undefined) : undefined,
+            accountId: paymentSource === 'account' ? (formData.accountId || undefined) : undefined,
         });
     };
 
@@ -212,28 +232,88 @@ export default function NewTransactionPage() {
                             </select>
                         </div>
 
-                        {/* Credit Card (only for EXPENSE) */}
-                        {formData.type === 'EXPENSE' && creditCards && creditCards.length > 0 && (
-                            <div>
-                                <label htmlFor="creditCard" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Tarjeta de crédito (opcional)
+                        {/* Payment Source: Account or Credit Card */}
+                        {formData.type === 'EXPENSE' && creditCards && creditCards.length > 0 ? (
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Origen del pago
                                 </label>
-                                <select
-                                    id="creditCard"
-                                    value={formData.creditCardId}
-                                    onChange={(e) => setFormData({ ...formData, creditCardId: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                >
-                                    <option value="">Sin tarjeta (efectivo/débito)</option>
-                                    {creditCards
-                                        .filter((card: any) => card.isActive)
-                                        .map((card: any) => (
-                                        <option key={card.id} value={card.id}>
-                                            💳 {card.name} {card.lastFourDigits ? `*${card.lastFourDigits}` : ''} — Disponible: {formatCOP(card.availableCredit)}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentSource('account')}
+                                        className={`p-3 rounded-lg border-2 transition text-sm ${paymentSource === 'account'
+                                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
+                                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-700'
+                                        }`}
+                                    >
+                                        <div className="text-xl mb-1">🏦</div>
+                                        <div className="font-semibold text-gray-900 dark:text-white">Cuenta</div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentSource('creditCard')}
+                                        className={`p-3 rounded-lg border-2 transition text-sm ${paymentSource === 'creditCard'
+                                            ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30'
+                                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 dark:bg-gray-700'
+                                        }`}
+                                    >
+                                        <div className="text-xl mb-1">💳</div>
+                                        <div className="font-semibold text-gray-900 dark:text-white">Tarjeta de crédito</div>
+                                    </button>
+                                </div>
+
+                                {paymentSource === 'account' && accounts && accounts.length > 0 && (
+                                    <select
+                                        value={formData.accountId}
+                                        onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Selecciona una cuenta</option>
+                                        {accounts.filter((a: any) => a.isActive).map((account: any) => (
+                                            <option key={account.id} value={account.id}>
+                                                🏦 {account.name} — Saldo: {formatCOP(account.balance)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {paymentSource === 'creditCard' && (
+                                    <select
+                                        value={formData.creditCardId}
+                                        onChange={(e) => setFormData({ ...formData, creditCardId: e.target.value })}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Selecciona una tarjeta</option>
+                                        {creditCards.filter((card: any) => card.isActive).map((card: any) => (
+                                            <option key={card.id} value={card.id}>
+                                                💳 {card.name} {card.lastFourDigits ? `*${card.lastFourDigits}` : ''} — Disponible: {formatCOP(card.availableCredit)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
+                        ) : (
+                            /* Account selector for INCOME or when no credit cards exist */
+                            accounts && accounts.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Cuenta
+                                    </label>
+                                    <select
+                                        value={formData.accountId}
+                                        onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
+                                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Selecciona una cuenta</option>
+                                        {accounts.filter((a: any) => a.isActive).map((account: any) => (
+                                            <option key={account.id} value={account.id}>
+                                                🏦 {account.name} — Saldo: {formatCOP(account.balance)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )
                         )}
 
                         {/* Budget Alert */}

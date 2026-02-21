@@ -18,6 +18,7 @@ export default function TransactionsPage() {
     const queryClient = useQueryClient();
     const { showToast } = useToast();
     const [filter, setFilter] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
+    const [accountFilter, setAccountFilter] = useState<string>('');
     const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
     useEffect(() => {
@@ -27,12 +28,20 @@ export default function TransactionsPage() {
     }, [authLoading, isAuthenticated, router]);
 
     const { data, isLoading } = useQuery({
-        queryKey: ['transactions', filter],
+        queryKey: ['transactions', filter, accountFilter],
         queryFn: () =>
             api.getTransactions({
                 ...(filter !== 'all' && { type: filter }),
+                ...(accountFilter && { accountId: accountFilter }),
                 limit: 50,
             }),
+        enabled: isAuthenticated,
+    });
+
+    // Fetch bank accounts for filter and edit modal
+    const { data: accounts } = useQuery({
+        queryKey: ['accounts'],
+        queryFn: () => api.getAccounts(),
         enabled: isAuthenticated,
     });
 
@@ -47,6 +56,7 @@ export default function TransactionsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
             showToast('Transaccion eliminada', 'success');
         },
         onError: (error: any) => {
@@ -59,6 +69,7 @@ export default function TransactionsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
             setEditingTransaction(null);
             showToast('Transaccion actualizada', 'success');
         },
@@ -87,6 +98,7 @@ export default function TransactionsPage() {
             Fecha: parseDate(t.date).toLocaleDateString('es-CO'),
             Tipo: t.type === 'INCOME' ? 'Ingreso' : 'Gasto',
             Categoría: t.category.name,
+            Cuenta: t.account?.name || (t.creditCard ? `💳 ${t.creditCard.name}` : ''),
             Descripción: t.description,
             Monto: Number(t.amount),
             Moneda: t.currency
@@ -105,6 +117,8 @@ export default function TransactionsPage() {
             ...transaction,
             amount: String(transaction.amount),
             date: toDateString(transaction.date),
+            accountId: transaction.accountId || '',
+            creditCardId: transaction.creditCardId || '',
         });
     };
 
@@ -120,6 +134,8 @@ export default function TransactionsPage() {
                 categoryId: editingTransaction.categoryId,
                 description: editingTransaction.description,
                 date: editingTransaction.date,
+                accountId: editingTransaction.accountId || '',
+                creditCardId: editingTransaction.creditCardId || '',
             }
         });
     };
@@ -138,6 +154,12 @@ export default function TransactionsPage() {
                                 type="transactions"
                                 filters={{ type: filter !== 'all' ? filter : undefined }}
                             />
+                            <Link
+                                href="/transactions/import"
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex-1 sm:flex-none text-center"
+                            >
+                                📤 Importar
+                            </Link>
                             <Link
                                 href="/transactions/new"
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition flex-1 sm:flex-none text-center"
@@ -181,6 +203,20 @@ export default function TransactionsPage() {
                         >
                             💸 Gastos
                         </button>
+                        {accounts && accounts.length > 0 && (
+                            <select
+                                value={accountFilter}
+                                onChange={(e) => setAccountFilter(e.target.value)}
+                                className="px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-none outline-none cursor-pointer"
+                            >
+                                <option value="">🏦 Todas las cuentas</option>
+                                {accounts.filter((a: any) => a.isActive).map((account: any) => (
+                                    <option key={account.id} value={account.id}>
+                                        🏦 {account.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
 
                     {/* Transactions List */}
@@ -281,6 +317,25 @@ export default function TransactionsPage() {
                                 </select>
                             </div>
 
+                            {/* Account */}
+                            {accounts && accounts.length > 0 && !editingTransaction.creditCardId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cuenta</label>
+                                    <select
+                                        value={editingTransaction.accountId}
+                                        onChange={(e) => setEditingTransaction({ ...editingTransaction, accountId: e.target.value, creditCardId: '' })}
+                                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm sm:text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="">Sin cuenta</option>
+                                        {accounts.filter((a: any) => a.isActive).map((account: any) => (
+                                            <option key={account.id} value={account.id}>
+                                                🏦 {account.name} — Saldo: {formatCOP(account.balance)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             {/* Description */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Descripción</label>
@@ -352,11 +407,18 @@ function TransactionRow({
                         <span className="hidden sm:inline">•</span>
                         <span>{parseDate(transaction.date).toLocaleDateString('es-CO')}</span>
                     </div>
-                    {transaction.creditCard && (
-                        <span className="inline-flex items-center gap-1 mt-1 text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
-                            💳 {transaction.creditCard.name} {transaction.creditCard.lastFourDigits ? `*${transaction.creditCard.lastFourDigits}` : ''}
-                        </span>
-                    )}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {transaction.account && (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                🏦 {transaction.account.name}
+                            </span>
+                        )}
+                        {transaction.creditCard && (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
+                                💳 {transaction.creditCard.name} {transaction.creditCard.lastFourDigits ? `*${transaction.creditCard.lastFourDigits}` : ''}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4">

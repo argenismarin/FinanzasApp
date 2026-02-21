@@ -54,7 +54,7 @@ cd frontend && npm install && cp .env.example .env.local
 - **Pages** (`src/app/`) - Next.js App Router pages (all use `'use client'`)
 - **Components** (`src/components/`) - Reusable UI (CurrencyInput, CameraCapture, ExportMenu)
 - **Contexts** (`src/contexts/`) - AuthContext (JWT handling), ThemeContext
-- **API Client** (`src/lib/api.ts`) - Axios wrapper with auth headers
+- **API Client** (`src/lib/api.ts`) - Fetch-based API client class with auth headers
 
 **State Management:** React Query for server state, Zustand for local state. Zod for form validation with react-hook-form.
 
@@ -87,6 +87,10 @@ Base URL: `/api`
 - `/ai/chat`, `/ai/analyze` - Financial advisor (OpenAI)
 - `/notifications` - Alert system
 - `/export` - CSV/PDF generation
+- `GET /health`, `GET /api/health` - Health checks
+- `GET /api/version` - Deployment version info
+- `GET /api/db-check` - Database connectivity check
+- `GET /api/openai-check` - OpenAI API validation
 
 ## Environment Variables
 
@@ -110,10 +114,14 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 - **Validation:** Use `src/lib/validation.ts` for safe parsing of numbers (`parseAmount`, `parseFloatSafe`, `parseIntSafe`) and dates (`parseDateSafe`). Pagination is limited to max 100 items per page.
 - **Currency formatting:** CurrencyInput component formats as COP in real-time. Use `formatCOP()` from `frontend/src/lib/utils.ts`.
 - **Date handling:** Use `parseDate()` from `frontend/src/lib/utils.ts` to avoid timezone issues with date-only strings.
-- **OCR:** Upload receipt image → OpenAI Vision extracts amount, date, merchant
+- **OCR:** Upload receipt image → OpenAI Vision (`gpt-4o-mini`) extracts amount, date, merchant
 - **PWA:** Configured via next-pwa, manifest in `/public/manifest.json`
 - **Export:** jspdf + jspdf-autotable for PDF, xlsx for Excel
 - **Charts:** Recharts library for analytics visualizations
+- **AI Model:** Uses `gpt-4o-mini` for OCR and AI chat/analysis features
+- **React Query defaults:** `staleTime: 60_000` (1 min), `refetchOnWindowFocus: true`
+- **UI Language:** Entire UI is in **Spanish** (es-CO locale). All user-facing strings, toast messages, labels, and navigation must be in Spanish.
+- **No test suite:** Neither backend nor frontend has test files or test runner configuration.
 
 ## Security Notes
 
@@ -122,7 +130,21 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 - All API endpoints require authentication except `/auth/login`
 - User data is scoped by `userId` - users can only access their own data
 - Rate limiting: 100 requests per 15 minutes globally
-- CORS configured for FRONTEND_URL only
+- CORS currently uses `origin: true` (permissive, allows all origins) — under active debugging/iteration
+
+## Deployment (Vercel)
+
+The backend is deployed as a Vercel serverless function:
+- `process.env.VERCEL` check skips `app.listen()` in serverless mode
+- Base64 images instead of filesystem (no persistent disk on Vercel)
+- OpenAI timeout set to 55s (Vercel function limit is 60s)
+- Config at `backend/vercel.json` (routes, CORS headers)
+- Build command: `prisma generate && npm run build`
+
+## TypeScript Configuration
+
+- **Backend:** `strict: false` in tsconfig.json
+- **Frontend:** `strict: true` in tsconfig.json, path alias `@/*` → `./src/*`
 
 ## UX Improvements
 
@@ -139,6 +161,14 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ### Authentication Pattern
 - Always use `useAuth()` hook from `@/contexts/AuthContext`
 - Never access `localStorage.getItem('token')` directly in components
+- All pages follow this pattern:
+```tsx
+'use client';
+// 1. Check useAuth() for isAuthenticated
+// 2. Redirect to /login if not authenticated
+// 3. Show LoadingSpinner while checking auth
+// 4. Render page content
+```
 
 ## Module Interrelation
 

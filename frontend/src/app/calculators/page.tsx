@@ -10,7 +10,16 @@ import { Button } from '@/components/ui/Button';
 
 export default function CalculatorsPage() {
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'compound' | 'loan' | 'savings' | 'retirement'>('compound');
+    const [activeTab, setActiveTab] = useState<'compound' | 'loan' | 'savings' | 'retirement' | 'debt-payoff' | 'budget'>('compound');
+
+    const tabs = [
+        { id: 'compound' as const, label: '💰 Interes Compuesto' },
+        { id: 'loan' as const, label: '🏦 Prestamo' },
+        { id: 'savings' as const, label: '🎯 Meta de Ahorro' },
+        { id: 'retirement' as const, label: '👴 Jubilacion' },
+        { id: 'debt-payoff' as const, label: '💳 Pago Deudas' },
+        { id: 'budget' as const, label: '📋 Presupuesto' },
+    ];
 
     return (
         <div className="max-w-6xl mx-auto">
@@ -18,47 +27,20 @@ export default function CalculatorsPage() {
 
             {/* Tabs */}
             <Card padding="sm" className="mb-4 sm:mb-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <button
-                        onClick={() => setActiveTab('compound')}
-                        className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg font-semibold transition text-xs sm:text-sm min-h-[44px] ${
-                            activeTab === 'compound'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        💰 Interes Compuesto
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('loan')}
-                        className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg font-semibold transition text-xs sm:text-sm min-h-[44px] ${
-                            activeTab === 'loan'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        🏦 Prestamo
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('savings')}
-                        className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg font-semibold transition text-xs sm:text-sm min-h-[44px] ${
-                            activeTab === 'savings'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        🎯 Meta de Ahorro
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('retirement')}
-                        className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg font-semibold transition text-xs sm:text-sm min-h-[44px] ${
-                            activeTab === 'retirement'
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        👴 Jubilacion
-                    </button>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg font-semibold transition text-xs sm:text-sm min-h-[44px] ${
+                                activeTab === tab.id
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
             </Card>
 
@@ -67,6 +49,8 @@ export default function CalculatorsPage() {
             {activeTab === 'loan' && <LoanCalculator />}
             {activeTab === 'savings' && <SavingsGoalCalculator />}
             {activeTab === 'retirement' && <RetirementCalculator />}
+            {activeTab === 'debt-payoff' && <DebtPayoffCalculator />}
+            {activeTab === 'budget' && <BudgetPlannerCalculator />}
         </div>
     );
 }
@@ -313,9 +297,6 @@ function SavingsGoalCalculator() {
                                     <p className="text-xs sm:text-sm font-bold text-green-600 dark:text-green-400">{formatCOP(result.daily)}</p>
                                 </div>
                             </div>
-                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                                <p className="text-xs text-gray-500 dark:text-gray-400">✨ Pequeños ahorros consistentes logran grandes metas</p>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -407,9 +388,6 @@ function RetirementCalculator() {
                                 </div>
                                 <p className="text-right text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">{result.progress.toFixed(1)}%</p>
                             </div>
-                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                                <p className="text-xs text-gray-500 dark:text-gray-400">🌟 Nunca es tarde para empezar. ¡Mientras antes, mejor!</p>
-                            </div>
                         </div>
                     </div>
                 )}
@@ -418,3 +396,396 @@ function RetirementCalculator() {
     );
 }
 
+// Debt Payoff Calculator
+function DebtPayoffCalculator() {
+    const [debts, setDebts] = useState([{ name: '', balance: '', rate: '', minPayment: '' }]);
+    const [extraPayment, setExtraPayment] = useState('');
+    const [result, setResult] = useState<any>(null);
+
+    const addDebt = () => {
+        setDebts([...debts, { name: '', balance: '', rate: '', minPayment: '' }]);
+    };
+
+    const removeDebt = (index: number) => {
+        if (debts.length > 1) {
+            setDebts(debts.filter((_, i) => i !== index));
+        }
+    };
+
+    const updateDebt = (index: number, field: string, value: string) => {
+        const updated = [...debts];
+        updated[index] = { ...updated[index], [field]: value };
+        setDebts(updated);
+    };
+
+    const simulate = (sortedDebts: { name: string; balance: number; rate: number; minPayment: number }[], extra: number) => {
+        const originalTotal = sortedDebts.reduce((s, d) => s + d.balance, 0);
+        let totalInterest = 0;
+        let months = 0;
+        const remaining = sortedDebts.map(d => ({ ...d }));
+        const maxMonths = 600; // 50 years cap
+
+        while (remaining.some(d => d.balance > 0) && months < maxMonths) {
+            months++;
+            let extraLeft = extra;
+
+            for (const d of remaining) {
+                if (d.balance <= 0) continue;
+                const interest = d.balance * (d.rate / 100 / 12);
+                totalInterest += interest;
+                d.balance += interest;
+                const payment = Math.min(d.minPayment, d.balance);
+                d.balance -= payment;
+            }
+
+            // Apply extra to first debt with balance
+            for (const d of remaining) {
+                if (d.balance <= 0 || extraLeft <= 0) continue;
+                const applied = Math.min(extraLeft, d.balance);
+                d.balance -= applied;
+                extraLeft -= applied;
+                break;
+            }
+        }
+
+        return { months, totalInterest, totalPaid: originalTotal + totalInterest };
+    };
+
+    const calculate = () => {
+        const parsed = debts
+            .filter(d => d.balance && d.rate && d.minPayment)
+            .map(d => ({
+                name: d.name || 'Deuda',
+                balance: parseFloat(d.balance) || 0,
+                rate: parseFloat(d.rate) || 0,
+                minPayment: parseFloat(d.minPayment) || 0,
+            }));
+
+        if (parsed.length === 0) return;
+
+        const extra = parseFloat(extraPayment) || 0;
+        const totalDebt = parsed.reduce((s, d) => s + d.balance, 0);
+        const totalMin = parsed.reduce((s, d) => s + d.minPayment, 0);
+
+        // Avalanche: highest rate first
+        const avalanche = parsed.map(d => ({ ...d })).sort((a, b) => b.rate - a.rate);
+        const avalancheResult = simulate(avalanche, extra);
+
+        // Snowball: lowest balance first
+        const snowball = parsed.map(d => ({ ...d })).sort((a, b) => a.balance - b.balance);
+        const snowballResult = simulate(snowball, extra);
+
+        setResult({
+            totalDebt,
+            totalMin,
+            extra,
+            avalanche: avalancheResult,
+            snowball: snowballResult,
+        });
+    };
+
+    return (
+        <Card padding="md">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">💳 Calculadora de Pago de Deudas</h2>
+
+            <div className="space-y-4 mb-6">
+                {debts.map((debt, i) => (
+                    <div key={i} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Deuda #{i + 1}</span>
+                            {debts.length > 1 && (
+                                <button onClick={() => removeDebt(i)} className="text-red-500 text-sm hover:text-red-700" aria-label={`Eliminar deuda ${i + 1}`}>
+                                    Eliminar
+                                </button>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nombre</label>
+                                <input
+                                    type="text"
+                                    value={debt.name}
+                                    onChange={(e) => updateDebt(i, 'name', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                                    placeholder="Ej: Visa"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Saldo</label>
+                                <input
+                                    type="number"
+                                    value={debt.balance}
+                                    onChange={(e) => updateDebt(i, 'balance', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                                    placeholder="1000000"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Tasa Anual %</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={debt.rate}
+                                    onChange={(e) => updateDebt(i, 'rate', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                                    placeholder="28.5"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Pago Minimo</label>
+                                <input
+                                    type="number"
+                                    value={debt.minPayment}
+                                    onChange={(e) => updateDebt(i, 'minPayment', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                                    placeholder="50000"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+
+                <button
+                    onClick={addDebt}
+                    className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 transition text-sm"
+                >
+                    + Agregar otra deuda
+                </button>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pago extra mensual</label>
+                    <CurrencyInput value={extraPayment} onChange={setExtraPayment} placeholder="Monto extra por mes" />
+                </div>
+
+                <Button onClick={calculate} fullWidth className="!bg-purple-600 hover:!bg-purple-700">
+                    Comparar Estrategias
+                </Button>
+            </div>
+
+            {result && (
+                <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
+                    {/* Avalanche */}
+                    <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/30 dark:to-orange-900/30 p-4 sm:p-6 rounded-lg">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1">🏔️ Avalancha</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Mayor tasa de interes primero</p>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Meses para pagar</p>
+                                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{result.avalanche.months}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Total intereses</p>
+                                <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCOP(result.avalanche.totalInterest)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Snowball */}
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 p-4 sm:p-6 rounded-lg">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1">⛄ Bola de Nieve</h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Menor saldo primero</p>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Meses para pagar</p>
+                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{result.snowball.months}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Total intereses</p>
+                                <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCOP(result.snowball.totalInterest)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recommendation */}
+                    <div className="md:col-span-2 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg p-4 text-white">
+                        <p className="font-bold mb-1">💡 Recomendacion</p>
+                        {result.avalanche.totalInterest <= result.snowball.totalInterest ? (
+                            <p className="text-sm text-white/90">
+                                La <strong>Avalancha</strong> te ahorra {formatCOP(result.snowball.totalInterest - result.avalanche.totalInterest)} en intereses.
+                                Es la opcion matematicamente optima. Pero si necesitas motivacion rapida, la Bola de Nieve elimina deudas pequenas primero.
+                            </p>
+                        ) : (
+                            <p className="text-sm text-white/90">
+                                La <strong>Bola de Nieve</strong> es ligeramente mas economica en tu caso.
+                                Ademas, eliminar deudas pequenas primero te dara motivacion para seguir adelante.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
+        </Card>
+    );
+}
+
+// Budget Planner Calculator
+function BudgetPlannerCalculator() {
+    const [income, setIncome] = useState('');
+    const [expenses, setExpenses] = useState([{ name: '', amount: '' }]);
+    const [result, setResult] = useState<any>(null);
+
+    const addExpense = () => {
+        setExpenses([...expenses, { name: '', amount: '' }]);
+    };
+
+    const removeExpense = (index: number) => {
+        if (expenses.length > 1) {
+            setExpenses(expenses.filter((_, i) => i !== index));
+        }
+    };
+
+    const updateExpense = (index: number, field: string, value: string) => {
+        const updated = [...expenses];
+        updated[index] = { ...updated[index], [field]: value };
+        setExpenses(updated);
+    };
+
+    const calculate = () => {
+        const monthlyIncome = parseFloat(income) || 0;
+        if (monthlyIncome <= 0) return;
+
+        const totalFixed = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        const available = monthlyIncome - totalFixed;
+
+        // 50/30/20 rule
+        const needs50 = monthlyIncome * 0.5;
+        const wants30 = monthlyIncome * 0.3;
+        const savings20 = monthlyIncome * 0.2;
+
+        setResult({
+            monthlyIncome,
+            totalFixed,
+            available,
+            fixedPct: (totalFixed / monthlyIncome) * 100,
+            rule: { needs50, wants30, savings20 },
+            suggested: {
+                needs: Math.max(0, needs50 - totalFixed),
+                wants: wants30,
+                savings: savings20,
+            }
+        });
+    };
+
+    return (
+        <Card padding="md">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">📋 Planificador de Presupuesto</h2>
+
+            <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ingreso Mensual</label>
+                        <CurrencyInput value={income} onChange={setIncome} placeholder="Tu ingreso mensual" />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gastos Fijos</label>
+                        <div className="space-y-2">
+                            {expenses.map((expense, i) => (
+                                <div key={i} className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={expense.name}
+                                        onChange={(e) => updateExpense(i, 'name', e.target.value)}
+                                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                        placeholder="Nombre (ej: Arriendo)"
+                                    />
+                                    <input
+                                        type="number"
+                                        value={expense.amount}
+                                        onChange={(e) => updateExpense(i, 'amount', e.target.value)}
+                                        className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                        placeholder="Monto"
+                                    />
+                                    {expenses.length > 1 && (
+                                        <button
+                                            onClick={() => removeExpense(i)}
+                                            className="text-red-500 hover:text-red-700 px-2"
+                                            aria-label={`Eliminar gasto ${expense.name || i + 1}`}
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            onClick={addExpense}
+                            className="mt-2 w-full py-1.5 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 transition text-sm"
+                        >
+                            + Agregar gasto fijo
+                        </button>
+                    </div>
+
+                    <Button onClick={calculate} fullWidth className="!bg-purple-600 hover:!bg-purple-700">
+                        Calcular
+                    </Button>
+                </div>
+
+                {result && (
+                    <div className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-900/30 dark:to-cyan-900/30 p-4 sm:p-6 rounded-lg">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Tu Presupuesto</h3>
+
+                        <div className="space-y-4">
+                            <div className="flex justify-between">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Ingreso:</span>
+                                <span className="font-bold text-green-600">{formatCOP(result.monthlyIncome)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Gastos Fijos:</span>
+                                <span className="font-bold text-red-600">-{formatCOP(result.totalFixed)}</span>
+                            </div>
+                            <div className="border-t border-gray-300 dark:border-gray-600 pt-2 flex justify-between">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white">Disponible:</span>
+                                <span className={`font-bold text-lg ${result.available >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatCOP(result.available)}
+                                </span>
+                            </div>
+
+                            {/* 50/30/20 Rule */}
+                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                                <p className="font-semibold text-sm text-gray-900 dark:text-white mb-3">Regla 50/30/20</p>
+                                <div className="space-y-2">
+                                    <div>
+                                        <div className="flex justify-between text-xs mb-1">
+                                            <span className="text-gray-600 dark:text-gray-400">50% Necesidades</span>
+                                            <span className="font-medium">{formatCOP(result.rule.needs50)}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                            <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min(result.fixedPct / 0.5, 100)}%` }} />
+                                        </div>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">
+                                            Tus fijos usan {result.fixedPct.toFixed(0)}% — {result.fixedPct <= 50 ? '✅ Bien' : '⚠️ Excede'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between text-xs mb-1">
+                                            <span className="text-gray-600 dark:text-gray-400">30% Deseos</span>
+                                            <span className="font-medium">{formatCOP(result.rule.wants30)}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                            <div className="bg-purple-500 h-2 rounded-full" style={{ width: '30%' }} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between text-xs mb-1">
+                                            <span className="text-gray-600 dark:text-gray-400">20% Ahorro</span>
+                                            <span className="font-medium">{formatCOP(result.rule.savings20)}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                            <div className="bg-green-500 h-2 rounded-full" style={{ width: '20%' }} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    💡 Intenta destinar al menos {formatCOP(result.rule.savings20)} al mes para ahorro e inversiones
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Card>
+    );
+}

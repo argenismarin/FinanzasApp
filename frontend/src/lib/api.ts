@@ -141,6 +141,7 @@ class ApiClient {
     async getTransactions(params?: {
         type?: string;
         categoryId?: string;
+        accountId?: string;
         startDate?: string;
         endDate?: string;
         page?: number;
@@ -169,7 +170,7 @@ class ApiClient {
         return response.json();
     }
 
-    async getTransactionStats(params?: { startDate?: string; endDate?: string }) {
+    async getTransactionStats(params?: { startDate?: string; endDate?: string; accountId?: string }) {
         const queryParams = new URLSearchParams();
         if (params) {
             Object.entries(params).forEach(([key, value]) => {
@@ -215,6 +216,7 @@ class ApiClient {
         recurringPattern?: any;
         metadata?: any;
         creditCardId?: string;
+        accountId?: string;
     }) {
         const response = await fetch(`${API_URL}/transactions`, {
             method: 'POST',

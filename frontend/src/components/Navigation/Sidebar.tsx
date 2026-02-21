@@ -35,6 +35,7 @@ const navSections: NavSection[] = [
       { href: '/savings', label: 'Ahorros', icon: '🐷' },
       { href: '/recurring', label: 'Recurrentes', icon: '🔁' },
       { href: '/checklist', label: 'Checklist', icon: '✅' },
+      { href: '/categories/rules', label: 'Auto-categorizar', icon: '🤖' },
     ],
   },
   {
