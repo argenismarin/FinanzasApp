@@ -296,7 +296,7 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { id } = req.params;
-        const { amount, paymentType, paymentDate, description } = req.body;
+        const { amount, paymentType, paymentDate, description, fromAccountId } = req.body;
 
         // Verificar que la tarjeta pertenece al usuario
         const card = await prisma.creditCard.findFirst({
@@ -307,35 +307,97 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Tarjeta no encontrada' });
         }
 
-        const payment = await prisma.creditCardPayment.create({
-            data: {
-                creditCardId: id,
-                amount,
-                paymentType: paymentType || 'PARTIAL',
-                paymentDate: new Date(paymentDate || Date.now()),
-                description: description || null
+        // Validate account ownership if provided
+        if (fromAccountId) {
+            const account = await prisma.bankAccount.findFirst({
+                where: { id: fromAccountId, userId }
+            });
+            if (!account) {
+                return res.status(404).json({ error: 'Cuenta bancaria no encontrada' });
             }
-        });
+        }
 
-        // Actualizar saldo de la tarjeta
+        // Get or create category for CC payments if account is provided
+        let ccPaymentCategory: any = null;
+        if (fromAccountId) {
+            ccPaymentCategory = await prisma.category.findFirst({
+                where: { userId, name: 'Pago Tarjeta de Crédito' }
+            });
+            if (!ccPaymentCategory) {
+                ccPaymentCategory = await prisma.category.create({
+                    data: {
+                        userId: userId!,
+                        name: 'Pago Tarjeta de Crédito',
+                        type: 'EXPENSE',
+                        color: '#3b82f6',
+                        icon: '💳'
+                    }
+                });
+            }
+        }
+
         const newBalance = Math.max(0, Number(card.currentBalance) - Number(amount));
         const newAvailable = Number(card.creditLimit) - newBalance;
 
-        await prisma.creditCard.update({
-            where: { id },
-            data: {
-                currentBalance: newBalance,
-                availableCredit: newAvailable
-            }
-        });
+        // Wrap all operations in atomic transaction
+        const payment = await prisma.$transaction(async (tx) => {
+            let transactionId: string | null = null;
 
-        // Marcar transacciones pendientes como facturadas si fue pago total
-        if (paymentType === 'FULL') {
-            await prisma.creditCardTransaction.updateMany({
-                where: { creditCardId: id, isPending: true },
-                data: { isPending: false }
+            // Create expense transaction and debit account if fromAccountId provided
+            if (fromAccountId && ccPaymentCategory) {
+                const expenseTransaction = await tx.transaction.create({
+                    data: {
+                        userId: userId!,
+                        amount: Number(amount),
+                        type: 'EXPENSE',
+                        categoryId: ccPaymentCategory.id,
+                        description: description || `Pago a tarjeta: ${card.name}`,
+                        date: new Date(paymentDate || Date.now()),
+                        createdBy: userId!,
+                        accountId: fromAccountId
+                    }
+                });
+                transactionId = expenseTransaction.id;
+
+                // Debit bank account
+                await tx.bankAccount.update({
+                    where: { id: fromAccountId },
+                    data: { balance: { decrement: Number(amount) } }
+                });
+            }
+
+            // Create credit card payment record
+            const ccPayment = await tx.creditCardPayment.create({
+                data: {
+                    creditCardId: id,
+                    amount,
+                    paymentType: paymentType || 'PARTIAL',
+                    paymentDate: new Date(paymentDate || Date.now()),
+                    description: description || null,
+                    fromAccountId: fromAccountId || null,
+                    transactionId
+                }
             });
-        }
+
+            // Update card balance
+            await tx.creditCard.update({
+                where: { id },
+                data: {
+                    currentBalance: newBalance,
+                    availableCredit: newAvailable
+                }
+            });
+
+            // Mark pending transactions as billed if full payment
+            if (paymentType === 'FULL') {
+                await tx.creditCardTransaction.updateMany({
+                    where: { creditCardId: id, isPending: true },
+                    data: { isPending: false }
+                });
+            }
+
+            return ccPayment;
+        });
 
         res.status(201).json({
             ...payment,

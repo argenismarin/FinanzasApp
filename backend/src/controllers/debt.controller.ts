@@ -103,7 +103,7 @@ export const updateDebt = async (req: AuthRequest, res: Response) => {
 export const payDebt = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const { amount, description } = req.body;
+        const { amount, description, accountId } = req.body;
         const userId = req.user!.id;
 
         if (!amount || parseFloat(amount) <= 0) {
@@ -116,6 +116,16 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
 
         if (!debt) {
             return res.status(404).json({ error: 'Debt not found' });
+        }
+
+        // Validate account ownership if provided
+        if (accountId) {
+            const account = await prisma.bankAccount.findFirst({
+                where: { id: accountId, userId }
+            });
+            if (!account) {
+                return res.status(404).json({ error: 'Cuenta bancaria no encontrada' });
+            }
         }
 
         const newPaidAmount = Number(debt.paidAmount) + parseFloat(amount);
@@ -156,9 +166,18 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
                     categoryId: debtCategory!.id,
                     description: description || `Pago a: ${debt.creditor}`,
                     date: new Date(),
-                    createdBy: userId
+                    createdBy: userId,
+                    accountId: accountId || null
                 }
             });
+
+            // Debit bank account if provided
+            if (accountId) {
+                await tx.bankAccount.update({
+                    where: { id: accountId },
+                    data: { balance: { decrement: parseFloat(amount) } }
+                });
+            }
 
             // Create payment history record
             await tx.debtPayment.create({

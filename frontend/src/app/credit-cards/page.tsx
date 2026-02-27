@@ -123,7 +123,8 @@ export default function CreditCardsPage() {
         amount: '',
         paymentType: 'PARTIAL',
         paymentDate: getTodayString(),
-        description: ''
+        description: '',
+        fromAccountId: ''
     });
 
     useEffect(() => {
@@ -136,6 +137,13 @@ export default function CreditCardsPage() {
     const { data: cards, isLoading: cardsLoading } = useQuery<CreditCard[]>({
         queryKey: ['credit-cards'],
         queryFn: () => api.getCreditCards(),
+        enabled: isAuthenticated
+    });
+
+    // Fetch bank accounts for payment source
+    const { data: accounts } = useQuery({
+        queryKey: ['bank-accounts'],
+        queryFn: () => api.getAccounts(),
         enabled: isAuthenticated
     });
 
@@ -185,11 +193,13 @@ export default function CreditCardsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
             setShowPaymentModal(false);
             setSelectedCard(null);
             setNewPayment({
                 amount: '', paymentType: 'PARTIAL',
-                paymentDate: getTodayString(), description: ''
+                paymentDate: getTodayString(), description: '',
+                fromAccountId: ''
             });
             showToast('Pago registrado exitosamente', 'success');
         },
@@ -232,12 +242,18 @@ export default function CreditCardsPage() {
     const handleAddPayment = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedCard) return;
+        const paymentData: any = {
+            ...newPayment,
+            amount: parseFloat(newPayment.amount.replace(/\./g, ''))
+        };
+        if (newPayment.fromAccountId) {
+            paymentData.fromAccountId = newPayment.fromAccountId;
+        } else {
+            delete paymentData.fromAccountId;
+        }
         addPaymentMutation.mutate({
             cardId: selectedCard.id,
-            data: {
-                ...newPayment,
-                amount: parseFloat(newPayment.amount.replace(/\./g, ''))
-            }
+            data: paymentData
         });
     };
 
@@ -381,7 +397,7 @@ export default function CreditCardsPage() {
                                             <Button
                                                 onClick={() => {
                                                     setSelectedCard(card);
-                                                    setNewPayment({ ...newPayment, amount: card.currentBalance.toString() });
+                                                    setNewPayment({ ...newPayment, amount: card.currentBalance.toString(), fromAccountId: '' });
                                                     setShowPaymentModal(true);
                                                 }}
                                                 variant="primary"
@@ -700,6 +716,25 @@ export default function CreditCardsPage() {
                                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
                                 required
                             />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cuenta de pago (opcional)</label>
+                            <select
+                                value={newPayment.fromAccountId}
+                                onChange={(e) => setNewPayment({ ...newPayment, fromAccountId: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            >
+                                <option value="">Sin cuenta asociada</option>
+                                {accounts?.filter((a: any) => a.isActive).map((account: any) => (
+                                    <option key={account.id} value={account.id}>
+                                        {account.name} — {formatCOP(Number(account.balance))}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Si seleccionas una cuenta, el saldo se descontara automaticamente
+                            </p>
                         </div>
 
                         <ModalFooter>

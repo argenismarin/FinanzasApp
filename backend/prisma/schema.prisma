@@ -63,6 +63,7 @@ model Transaction {
   creditCardId        String?              @map("credit_card_id")
   tags                String?              @db.Text
   checklistCompletion ChecklistCompletion?
+  creditCardPayment   CreditCardPayment?
   account             BankAccount?         @relation(fields: [accountId], references: [id])
   creditCard          CreditCard?          @relation("LinkedTransactions", fields: [creditCardId], references: [id])
   category            Category             @relation(fields: [categoryId], references: [id])
@@ -168,8 +169,9 @@ model BankAccount {
   isActive     Boolean       @default(true) @map("is_active")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions       Transaction[]
+  creditCardPayments CreditCardPayment[]
 
   @@index([userId])
   @@map("bank_accounts")
@@ -358,17 +360,22 @@ model CreditCardTransaction {
 }
 
 model CreditCardPayment {
-  id           String      @id @default(uuid())
-  creditCardId String      @map("credit_card_id")
-  amount       Decimal     @db.Decimal(12, 2)
-  paymentType  PaymentType @default(FULL) @map("payment_type")
-  paymentDate  DateTime    @map("payment_date") @db.Date
-  description  String?
-  createdAt    DateTime    @default(now()) @map("created_at")
-  creditCard   CreditCard  @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid())
+  creditCardId  String       @map("credit_card_id")
+  amount        Decimal      @db.Decimal(12, 2)
+  paymentType   PaymentType  @default(FULL) @map("payment_type")
+  paymentDate   DateTime     @map("payment_date") @db.Date
+  description   String?
+  fromAccountId String?      @map("from_account_id")
+  transactionId String?      @unique @map("transaction_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  creditCard    CreditCard   @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  fromAccount   BankAccount? @relation(fields: [fromAccountId], references: [id])
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([creditCardId])
   @@index([paymentDate])
+  @@index([fromAccountId])
   @@map("credit_card_payments")
 }
 

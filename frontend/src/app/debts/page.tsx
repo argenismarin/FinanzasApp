@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ExportMenu from '@/components/ExportMenu';
 import CurrencyInput from '@/components/CurrencyInput';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,11 +16,12 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 export default function DebtsPage() {
     const router = useRouter();
     const { isAuthenticated, loading: authLoading } = useAuth();
+    const queryClient = useQueryClient();
     const { showToast } = useToast();
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingDebt, setEditingDebt] = useState<any>(null);
     const [expandedPaymentHistory, setExpandedPaymentHistory] = useState<string | null>(null);
-    const [paymentModal, setPaymentModal] = useState<{ debt: any; amount: string; description: string } | null>(null);
+    const [paymentModal, setPaymentModal] = useState<{ debt: any; amount: string; description: string; accountId: string } | null>(null);
     const [newDebt, setNewDebt] = useState({
         creditor: '',
         totalAmount: '',
@@ -37,6 +38,12 @@ export default function DebtsPage() {
     const { data: debtsData, isLoading, refetch } = useQuery({
         queryKey: ['debts'],
         queryFn: () => api.getDebts(),
+        enabled: isAuthenticated,
+    });
+
+    const { data: accounts } = useQuery({
+        queryKey: ['bank-accounts'],
+        queryFn: () => api.getAccounts(),
         enabled: isAuthenticated,
     });
 
@@ -66,10 +73,11 @@ export default function DebtsPage() {
     });
 
     const payMutation = useMutation({
-        mutationFn: ({ id, amount, description }: { id: string; amount: number; description?: string }) =>
-            api.payDebt(id, { amount, description }),
+        mutationFn: ({ id, amount, description, accountId }: { id: string; amount: number; description?: string; accountId?: string }) =>
+            api.payDebt(id, { amount, description, accountId }),
         onSuccess: (data) => {
             refetch();
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
             setPaymentModal(null);
             showToast(data.message || 'Pago registrado exitosamente', 'success');
         },
@@ -90,7 +98,7 @@ export default function DebtsPage() {
     });
 
     const handlePayment = (debt: any) => {
-        setPaymentModal({ debt, amount: '', description: '' });
+        setPaymentModal({ debt, amount: '', description: '', accountId: '' });
     };
 
     const submitPayment = () => {
@@ -100,7 +108,8 @@ export default function DebtsPage() {
             payMutation.mutate({
                 id: paymentModal.debt.id,
                 amount,
-                description: paymentModal.description
+                description: paymentModal.description,
+                ...(paymentModal.accountId ? { accountId: paymentModal.accountId } : {})
             });
         } else {
             showToast('Ingresa un monto valido', 'warning');
@@ -667,6 +676,26 @@ export default function DebtsPage() {
                                     placeholder="Ej: Pago parcial, Abono mensual..."
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Cuenta de pago (opcional)
+                                </label>
+                                <select
+                                    value={paymentModal.accountId}
+                                    onChange={(e) => setPaymentModal({ ...paymentModal, accountId: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                                >
+                                    <option value="">Sin cuenta asociada</option>
+                                    {accounts?.filter((a: any) => a.isActive).map((account: any) => (
+                                        <option key={account.id} value={account.id}>
+                                            {account.name} — {formatCOP(Number(account.balance))}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Si seleccionas una cuenta, el saldo se descontara automaticamente
+                                </p>
                             </div>
                             <ModalFooter>
                                 <Button
