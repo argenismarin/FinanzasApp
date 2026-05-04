@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP, getTodayString } from '@/lib/utils';
+import { useToast } from '@/components/Toast';
 import Link from 'next/link';
 import CurrencyInput from '@/components/CurrencyInput';
 import TagInput from '@/components/TagInput';
@@ -14,6 +15,8 @@ export default function NewTransactionPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { showToast } = useToast();
+    const [formError, setFormError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState({
         type: 'EXPENSE',
@@ -124,16 +127,52 @@ export default function NewTransactionPage() {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+            showToast('Transacción creada', 'success');
             router.push('/transactions');
+        },
+        onError: (err: any) => {
+            const msg = err?.message || 'No se pudo crear la transacción';
+            setFormError(msg);
+            showToast(msg, 'error');
         },
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setFormError(null);
+
+        // Validación cliente — refleja parseAmount del backend
+        const amount = parseFloat(formData.amount);
+        if (!formData.amount || isNaN(amount) || amount <= 0) {
+            setFormError('Ingresa un monto válido (mayor a cero)');
+            return;
+        }
+        if (!formData.categoryId) {
+            setFormError('Selecciona una categoría');
+            return;
+        }
+        if (!formData.description.trim()) {
+            setFormError('La descripción es requerida');
+            return;
+        }
+        if (!formData.date) {
+            setFormError('La fecha es requerida');
+            return;
+        }
+        if (paymentSource === 'creditCard' && formData.type === 'INCOME') {
+            setFormError('Los ingresos no pueden estar asociados a una tarjeta de crédito');
+            return;
+        }
+
         createMutation.mutate({
             ...formData,
-            amount: parseFloat(formData.amount),
+            amount,
             tags: formData.tags.length > 0 ? formData.tags : undefined,
             creditCardId: paymentSource === 'creditCard' ? (formData.creditCardId || undefined) : undefined,
             accountId: paymentSource === 'account' ? (formData.accountId || undefined) : undefined,
@@ -450,6 +489,14 @@ export default function NewTransactionPage() {
                                 placeholder="Ej: vacaciones, emergencia, trabajo..."
                             />
                         </div>
+
+                        {/* Form error */}
+                        {formError && (
+                            <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 flex items-center gap-3">
+                                <span className="text-xl" aria-hidden="true">⚠️</span>
+                                <p className="text-sm text-red-700 dark:text-red-300">{formError}</p>
+                            </div>
+                        )}
 
                         {/* Submit */}
                         <button

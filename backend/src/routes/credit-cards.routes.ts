@@ -7,6 +7,8 @@ import {
     updateCreditCard,
     deleteCreditCard,
     addCreditCardTransaction,
+    updateCreditCardTransaction,
+    deleteCreditCardTransaction,
     addCreditCardPayment,
     getCreditCardsSummary
 } from '../controllers/credit-cards.controller';
@@ -28,6 +30,8 @@ router.delete('/:id', deleteCreditCard);
 
 // Transacciones de tarjeta
 router.post('/:id/transactions', addCreditCardTransaction);
+router.put('/:id/transactions/:transactionId', updateCreditCardTransaction);
+router.delete('/:id/transactions/:transactionId', deleteCreditCardTransaction);
 
 // Pagos de tarjeta
 router.post('/:id/payments', addCreditCardPayment);

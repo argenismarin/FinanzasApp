@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { parseAmount, parseDateSafe } from '../lib/validation';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
     user?: {
@@ -58,7 +60,7 @@ export const getCreditCards = async (req: AuthRequest, res: Response) => {
 
         res.json(cardsWithStats);
     } catch (error) {
-        console.error('Error fetching credit cards:', error);
+        logger.fromError('credit_cards_get_failed', error);
         res.status(500).json({ error: 'Error al obtener tarjetas de crédito' });
     }
 };
@@ -103,7 +105,7 @@ export const getCreditCard = async (req: AuthRequest, res: Response) => {
             }))
         });
     } catch (error) {
-        console.error('Error fetching credit card:', error);
+        logger.fromError('credit_card_get_one_failed', error);
         res.status(500).json({ error: 'Error al obtener tarjeta' });
     }
 };
@@ -152,7 +154,7 @@ export const createCreditCard = async (req: AuthRequest, res: Response) => {
             currentBalance: Number(card.currentBalance)
         });
     } catch (error) {
-        console.error('Error creating credit card:', error);
+        logger.fromError('credit_card_create_failed', error);
         res.status(500).json({ error: 'Error al crear tarjeta de crédito' });
     }
 };
@@ -197,7 +199,7 @@ export const updateCreditCard = async (req: AuthRequest, res: Response) => {
 
         res.json(updatedCard);
     } catch (error) {
-        console.error('Error updating credit card:', error);
+        logger.fromError('credit_card_update_failed', error);
         res.status(500).json({ error: 'Error al actualizar tarjeta' });
     }
 };
@@ -223,7 +225,7 @@ export const deleteCreditCard = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: 'Tarjeta eliminada correctamente' });
     } catch (error) {
-        console.error('Error deleting credit card:', error);
+        logger.fromError('credit_card_delete_failed', error);
         res.status(500).json({ error: 'Error al eliminar tarjeta' });
     }
 };
@@ -251,33 +253,40 @@ export const addCreditCardTransaction = async (req: AuthRequest, res: Response) 
             return res.status(404).json({ error: 'Tarjeta no encontrada' });
         }
 
-        const numInstallments = installments || 1;
-        const installmentAmount = numInstallments > 1 ? amount / numInstallments : null;
+        // Validar monto
+        const parsedAmount = parseAmount(amount);
+        if (parsedAmount === null) {
+            return res.status(400).json({ error: 'Monto inválido. Debe ser un número positivo.' });
+        }
 
-        const transaction = await prisma.creditCardTransaction.create({
-            data: {
-                creditCardId: id,
-                amount,
-                description,
-                merchant: merchant || null,
-                categoryId: categoryId || null,
-                installments: numInstallments,
-                installmentAmount,
-                transactionDate: new Date(transactionDate || Date.now()),
-                isPending: true
-            }
-        });
+        const numInstallments = installments && installments > 0 ? installments : 1;
+        const installmentAmount = numInstallments > 1 ? parsedAmount / numInstallments : null;
 
-        // Actualizar saldo de la tarjeta
-        const newBalance = Number(card.currentBalance) + Number(amount);
-        const newAvailable = Number(card.creditLimit) - newBalance;
+        const transaction = await prisma.$transaction(async (tx) => {
+            const ccTransaction = await tx.creditCardTransaction.create({
+                data: {
+                    creditCardId: id,
+                    amount: parsedAmount,
+                    description,
+                    merchant: merchant || null,
+                    categoryId: categoryId || null,
+                    installments: numInstallments,
+                    installmentAmount,
+                    transactionDate: parseDateSafe(transactionDate) || new Date(),
+                    isPending: true
+                }
+            });
 
-        await prisma.creditCard.update({
-            where: { id },
-            data: {
-                currentBalance: newBalance,
-                availableCredit: newAvailable > 0 ? newAvailable : 0
-            }
+            // Actualizar saldo de la tarjeta atómicamente
+            await tx.creditCard.update({
+                where: { id },
+                data: {
+                    currentBalance: { increment: parsedAmount },
+                    availableCredit: { decrement: parsedAmount }
+                }
+            });
+
+            return ccTransaction;
         });
 
         res.status(201).json({
@@ -286,8 +295,127 @@ export const addCreditCardTransaction = async (req: AuthRequest, res: Response) 
             installmentAmount: transaction.installmentAmount ? Number(transaction.installmentAmount) : null
         });
     } catch (error) {
-        console.error('Error adding credit card transaction:', error);
+        logger.fromError('credit_card_add_transaction_failed', error);
         res.status(500).json({ error: 'Error al agregar transacción' });
+    }
+};
+
+// Editar transacción de tarjeta de crédito
+export const updateCreditCardTransaction = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { id, transactionId } = req.params;
+        const { amount, description, merchant, categoryId, installments, transactionDate } = req.body;
+
+        // Verificar que la tarjeta pertenece al usuario
+        const card = await prisma.creditCard.findFirst({
+            where: { id, userId }
+        });
+        if (!card) {
+            return res.status(404).json({ error: 'Tarjeta no encontrada' });
+        }
+
+        const existing = await prisma.creditCardTransaction.findFirst({
+            where: { id: transactionId, creditCardId: id }
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Transacción no encontrada' });
+        }
+
+        const oldAmount = Number(existing.amount);
+        let newAmount = oldAmount;
+        if (amount !== undefined) {
+            const parsed = parseAmount(amount);
+            if (parsed === null) {
+                return res.status(400).json({ error: 'Monto inválido. Debe ser un número positivo.' });
+            }
+            newAmount = parsed;
+        }
+        const diff = newAmount - oldAmount;
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const txn = await tx.creditCardTransaction.update({
+                where: { id: transactionId },
+                data: {
+                    ...(amount !== undefined && { amount: newAmount }),
+                    ...(description !== undefined && { description }),
+                    ...(merchant !== undefined && { merchant }),
+                    ...(categoryId !== undefined && { categoryId }),
+                    ...(installments !== undefined && {
+                        installments,
+                        installmentAmount: installments > 1 ? newAmount / installments : null
+                    }),
+                    ...(transactionDate !== undefined && { transactionDate: parseDateSafe(transactionDate) || new Date() })
+                }
+            });
+
+            // Adjust card balance if amount changed
+            if (diff !== 0) {
+                await tx.creditCard.update({
+                    where: { id },
+                    data: {
+                        currentBalance: { increment: diff },
+                        availableCredit: { decrement: diff }
+                    }
+                });
+            }
+
+            return txn;
+        });
+
+        res.json({
+            ...updated,
+            amount: Number(updated.amount),
+            installmentAmount: updated.installmentAmount ? Number(updated.installmentAmount) : null
+        });
+    } catch (error) {
+        logger.fromError('credit_card_update_transaction_failed', error);
+        res.status(500).json({ error: 'Error al actualizar transacción' });
+    }
+};
+
+// Eliminar transacción de tarjeta de crédito
+export const deleteCreditCardTransaction = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { id, transactionId } = req.params;
+
+        // Verificar que la tarjeta pertenece al usuario
+        const card = await prisma.creditCard.findFirst({
+            where: { id, userId }
+        });
+        if (!card) {
+            return res.status(404).json({ error: 'Tarjeta no encontrada' });
+        }
+
+        const existing = await prisma.creditCardTransaction.findFirst({
+            where: { id: transactionId, creditCardId: id }
+        });
+        if (!existing) {
+            return res.status(404).json({ error: 'Transacción no encontrada' });
+        }
+
+        const amountNum = Number(existing.amount);
+
+        await prisma.$transaction(async (tx) => {
+            await tx.creditCardTransaction.delete({
+                where: { id: transactionId }
+            });
+
+            // Revert card balance
+            await tx.creditCard.update({
+                where: { id },
+                data: {
+                    currentBalance: { decrement: amountNum },
+                    availableCredit: { increment: amountNum }
+                }
+            });
+        });
+
+        res.json({ message: 'Transacción eliminada correctamente' });
+    } catch (error) {
+        logger.fromError('credit_card_delete_transaction_failed', error);
+        res.status(500).json({ error: 'Error al eliminar transacción' });
     }
 };
 
@@ -305,6 +433,12 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
 
         if (!card) {
             return res.status(404).json({ error: 'Tarjeta no encontrada' });
+        }
+
+        // Validar monto
+        const parsedAmount = parseAmount(amount);
+        if (parsedAmount === null) {
+            return res.status(400).json({ error: 'Monto inválido. Debe ser un número positivo.' });
         }
 
         // Validate account ownership if provided
@@ -336,8 +470,9 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
             }
         }
 
-        const newBalance = Math.max(0, Number(card.currentBalance) - Number(amount));
+        const newBalance = Math.max(0, Number(card.currentBalance) - parsedAmount);
         const newAvailable = Number(card.creditLimit) - newBalance;
+        const paymentDateParsed = parseDateSafe(paymentDate) || new Date();
 
         // Wrap all operations in atomic transaction
         const payment = await prisma.$transaction(async (tx) => {
@@ -348,11 +483,11 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
                 const expenseTransaction = await tx.transaction.create({
                     data: {
                         userId: userId!,
-                        amount: Number(amount),
+                        amount: parsedAmount,
                         type: 'EXPENSE',
                         categoryId: ccPaymentCategory.id,
                         description: description || `Pago a tarjeta: ${card.name}`,
-                        date: new Date(paymentDate || Date.now()),
+                        date: paymentDateParsed,
                         createdBy: userId!,
                         accountId: fromAccountId
                     }
@@ -362,7 +497,7 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
                 // Debit bank account
                 await tx.bankAccount.update({
                     where: { id: fromAccountId },
-                    data: { balance: { decrement: Number(amount) } }
+                    data: { balance: { decrement: parsedAmount } }
                 });
             }
 
@@ -370,9 +505,9 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
             const ccPayment = await tx.creditCardPayment.create({
                 data: {
                     creditCardId: id,
-                    amount,
+                    amount: parsedAmount,
                     paymentType: paymentType || 'PARTIAL',
-                    paymentDate: new Date(paymentDate || Date.now()),
+                    paymentDate: paymentDateParsed,
                     description: description || null,
                     fromAccountId: fromAccountId || null,
                     transactionId
@@ -404,7 +539,7 @@ export const addCreditCardPayment = async (req: AuthRequest, res: Response) => {
             amount: Number(payment.amount)
         });
     } catch (error) {
-        console.error('Error adding credit card payment:', error);
+        logger.fromError('credit_card_add_payment_failed', error);
         res.status(500).json({ error: 'Error al registrar pago' });
     }
 };
@@ -457,7 +592,7 @@ export const getCreditCardsSummary = async (req: AuthRequest, res: Response) => 
             upcomingPayments
         });
     } catch (error) {
-        console.error('Error fetching credit cards summary:', error);
+        logger.fromError('credit_cards_summary_failed', error);
         res.status(500).json({ error: 'Error al obtener resumen' });
     }
 };

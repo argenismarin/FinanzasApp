@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // Get JWT_SECRET - will be validated at runtime
 const getJwtSecret = (): string => {
@@ -49,18 +50,19 @@ export const login = async (req: Request, res: Response) => {
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' } as any
         );
 
+        logger.info('user_login', { userId: user.id, email: user.email });
+
         res.json({
             token,
             user: {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: user.role,
-                settings: user.settings
+                role: user.role
             }
         });
     } catch (error: any) {
-        console.error('Login error:', error);
+        logger.fromError('login_failed', error, { email: req.body?.email });
         if (error.message?.includes('JWT_SECRET')) {
             res.status(500).json({ error: 'Error de configuración del servidor' });
         } else if (error.code === 'P2021') {
@@ -104,12 +106,7 @@ export const register = async (req: Request, res: Response) => {
                     name,
                     password: hashedPassword,
                     role: 'USER',
-                    isActive: true,
-                    settings: JSON.stringify({
-                        currency: 'COP',
-                        locale: 'es-CO',
-                        theme: 'light'
-                    })
+                    isActive: true
                 }
             });
         }
@@ -143,12 +140,11 @@ export const register = async (req: Request, res: Response) => {
                 id: user.id,
                 email: user.email,
                 name: user.name,
-                role: user.role,
-                settings: user.settings
+                role: user.role
             }
         });
     } catch (error: any) {
-        console.error('Register error:', error);
+        logger.fromError('register_failed', error, { email: req.body?.email });
         if (error.message?.includes('JWT_SECRET')) {
             res.status(500).json({ error: 'Error de configuración del servidor' });
         } else if (error.code === 'P2002') {
@@ -173,7 +169,6 @@ export const me = async (req: any, res: Response) => {
                 name: true,
                 role: true,
                 avatarUrl: true,
-                settings: true,
                 createdAt: true
             }
         });
@@ -184,7 +179,7 @@ export const me = async (req: any, res: Response) => {
 
         res.json(user);
     } catch (error) {
-        console.error('Get user error:', error);
+        logger.fromError('get_user_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

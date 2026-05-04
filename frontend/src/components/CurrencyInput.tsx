@@ -9,6 +9,26 @@ interface CurrencyInputProps {
     className?: string;
     disabled?: boolean;
     autoFocus?: boolean;
+    /** Si true, permite valor 0 (default false para retrocompatibilidad) */
+    allowZero?: boolean;
+}
+
+// Convierte cualquier value (string/number/empty) a string numérico limpio o ''
+function toRawDigits(value: string | number | undefined | null): string {
+    if (value === undefined || value === null || value === '') return '';
+    if (typeof value === 'number') {
+        if (isNaN(value)) return '';
+        return Math.trunc(Math.abs(value)).toString();
+    }
+    return value.replace(/[^\d]/g, '');
+}
+
+// Formatea string de dígitos a "1.234.567" (es-CO)
+function formatDigits(digits: string): string {
+    if (digits === '') return '';
+    const num = parseInt(digits, 10);
+    if (isNaN(num)) return '';
+    return num.toLocaleString('es-CO');
 }
 
 export default function CurrencyInput({
@@ -17,48 +37,40 @@ export default function CurrencyInput({
     placeholder = 'Ingrese monto',
     className = '',
     disabled = false,
-    autoFocus = false
+    autoFocus = false,
+    allowZero = false
 }: CurrencyInputProps) {
     const [displayValue, setDisplayValue] = useState('');
 
     useEffect(() => {
-        // Convertir el valor numérico a formato con separadores
-        if (value) {
-            const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^\d]/g, '')) : value;
-            if (!isNaN(numericValue) && numericValue > 0) {
-                setDisplayValue(numericValue.toLocaleString('es-CO'));
-            } else {
-                setDisplayValue('');
-            }
-        } else {
+        const digits = toRawDigits(value);
+        if (digits === '' || (digits === '0' && !allowZero)) {
             setDisplayValue('');
+        } else {
+            setDisplayValue(formatDigits(digits));
         }
-    }, [value]);
+    }, [value, allowZero]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const inputValue = e.target.value;
-        
-        // Remover todo excepto números
-        const numericValue = inputValue.replace(/[^\d]/g, '');
-        
+        const numericValue = e.target.value.replace(/[^\d]/g, '');
+
         if (numericValue === '') {
             setDisplayValue('');
             onChange('');
             return;
         }
 
-        // Formatear con separadores de miles
-        const formatted = parseInt(numericValue).toLocaleString('es-CO');
-        setDisplayValue(formatted);
-        
-        // Pasar el valor numérico sin formato al parent
+        setDisplayValue(formatDigits(numericValue));
         onChange(numericValue);
     };
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-        // Seleccionar todo al hacer focus
         e.target.select();
     };
+
+    // Cantidad numérica para el preview de formato COP
+    const numericForPreview = displayValue === '' ? null : parseInt(displayValue.replace(/\./g, ''), 10);
+    const showPreview = numericForPreview !== null && !isNaN(numericForPreview);
 
     return (
         <div className="relative">
@@ -67,6 +79,7 @@ export default function CurrencyInput({
             </span>
             <input
                 type="text"
+                inputMode="numeric"
                 value={displayValue}
                 onChange={handleChange}
                 onFocus={handleFocus}
@@ -75,13 +88,13 @@ export default function CurrencyInput({
                 autoFocus={autoFocus}
                 className={`w-full pl-10 pr-4 py-3 sm:py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-medium bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px] sm:min-h-0 ${className}`}
             />
-            {displayValue && (
+            {showPreview && (
                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-right">
                     {new Intl.NumberFormat('es-CO', {
                         style: 'currency',
                         currency: 'COP',
                         minimumFractionDigits: 0
-                    }).format(parseInt(displayValue.replace(/\./g, '')))}
+                    }).format(numericForPreview)}
                 </div>
             )}
         </div>
@@ -93,35 +106,30 @@ export function SimpleCurrencyInput({
     value,
     onChange,
     placeholder = '$0',
-    className = ''
+    className = '',
+    allowZero = false
 }: CurrencyInputProps) {
     const [displayValue, setDisplayValue] = useState('');
 
     useEffect(() => {
-        if (value) {
-            const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^\d]/g, '')) : value;
-            if (!isNaN(numericValue) && numericValue > 0) {
-                setDisplayValue(numericValue.toLocaleString('es-CO'));
-            } else {
-                setDisplayValue('');
-            }
-        } else {
+        const digits = toRawDigits(value);
+        if (digits === '' || (digits === '0' && !allowZero)) {
             setDisplayValue('');
+        } else {
+            setDisplayValue(formatDigits(digits));
         }
-    }, [value]);
+    }, [value, allowZero]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const inputValue = e.target.value;
-        const numericValue = inputValue.replace(/[^\d]/g, '');
-        
+        const numericValue = e.target.value.replace(/[^\d]/g, '');
+
         if (numericValue === '') {
             setDisplayValue('');
             onChange('');
             return;
         }
 
-        const formatted = parseInt(numericValue).toLocaleString('es-CO');
-        setDisplayValue(formatted);
+        setDisplayValue(formatDigits(numericValue));
         onChange(numericValue);
     };
 
@@ -130,6 +138,7 @@ export function SimpleCurrencyInput({
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">$</span>
             <input
                 type="text"
+                inputMode="numeric"
                 value={displayValue}
                 onChange={handleChange}
                 placeholder={placeholder}

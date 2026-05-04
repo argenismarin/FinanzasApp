@@ -16,6 +16,8 @@ import {
     Cell,
     BarChart,
     Bar,
+    AreaChart,
+    Area,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -36,7 +38,7 @@ export default function AnalyticsPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data: trendData, isLoading: trendLoading } = useQuery({
+    const trendQuery = useQuery({
         queryKey: ['monthly-trend', months],
         queryFn: async () => {
             const data = await api.getAnalyticsOverview();
@@ -44,8 +46,10 @@ export default function AnalyticsPage() {
         },
         enabled: isAuthenticated,
     });
+    const trendData = trendQuery.data;
+    const trendLoading = trendQuery.isLoading;
 
-    const { data: categoryData, isLoading: categoryLoading } = useQuery({
+    const categoryQuery = useQuery({
         queryKey: ['category-breakdown', categoryType],
         queryFn: async () => {
             const data = await api.getCategoryBreakdown({ type: categoryType });
@@ -53,12 +57,32 @@ export default function AnalyticsPage() {
         },
         enabled: isAuthenticated,
     });
+    const categoryData = categoryQuery.data;
+    const categoryLoading = categoryQuery.isLoading;
 
-    const { data: topCategories, isLoading: topLoading } = useQuery({
+    const topQuery = useQuery({
         queryKey: ['top-categories', categoryType],
         queryFn: () => api.getTopCategories({ limit: 5, type: categoryType }),
         enabled: isAuthenticated,
     });
+    const topCategories = topQuery.data;
+    const topLoading = topQuery.isLoading;
+
+    const advancedQuery = useQuery({
+        queryKey: ['advanced-analytics'],
+        queryFn: () => api.getAdvancedAnalytics(),
+        enabled: isAuthenticated,
+    });
+    const advancedData = advancedQuery.data;
+
+    // Detect any analytics error to show a global banner
+    const anyError = trendQuery.isError || categoryQuery.isError || topQuery.isError || advancedQuery.isError;
+    const refetchAll = () => {
+        trendQuery.refetch();
+        categoryQuery.refetch();
+        topQuery.refetch();
+        advancedQuery.refetch();
+    };
 
     if (authLoading || !isAuthenticated) {
         return (
@@ -119,6 +143,24 @@ export default function AnalyticsPage() {
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-8">
                     📊 Analítica Financiera
                 </h1>
+
+                {/* Global error banner if any analytics query fails */}
+                {anyError && (
+                    <div className="mb-4 sm:mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">⚠️</span>
+                            <p className="text-sm text-red-700 dark:text-red-300">
+                                Algunos datos de análisis no se pudieron cargar
+                            </p>
+                        </div>
+                        <button
+                            onClick={refetchAll}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition shrink-0"
+                        >
+                            Reintentar
+                        </button>
+                    </div>
+                )}
 
                 {/* Monthly Trend */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 mb-4 sm:mb-6">
@@ -334,6 +376,134 @@ export default function AnalyticsPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Net Worth */}
+                {advancedData?.netWorth && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 mt-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Patrimonio Neto</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Cuentas</p>
+                                <p className="text-lg font-bold text-blue-600">{formatCOP(advancedData.netWorth.bankBalance)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Ahorros</p>
+                                <p className="text-lg font-bold text-green-600">{formatCOP(advancedData.netWorth.savings)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Deudas</p>
+                                <p className="text-lg font-bold text-red-600">-{formatCOP(advancedData.netWorth.debts)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Patrimonio Neto</p>
+                                <p className={`text-lg font-bold ${advancedData.netWorth.current >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatCOP(advancedData.netWorth.current)}
+                                </p>
+                            </div>
+                        </div>
+                        {advancedData.netWorth.trend.length > 1 && (
+                            <ResponsiveContainer width="100%" height={250}>
+                                <AreaChart data={advancedData.netWorth.trend}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+                                    <Tooltip formatter={(value: any) => formatCOP(value)} />
+                                    <Area type="monotone" dataKey="netWorth" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} name="Patrimonio" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        )}
+                    </div>
+                )}
+
+                {/* Savings Rate */}
+                {advancedData?.savingsRateTrend && advancedData.savingsRateTrend.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 mt-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Tasa de Ahorro Mensual</h2>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={advancedData.savingsRateTrend}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${v}%`} />
+                                <Tooltip formatter={(value: any, name: string) => name === 'savingsRate' ? `${value}%` : formatCOP(value)} />
+                                <Bar dataKey="savingsRate" fill="#10b981" radius={[4, 4, 0, 0]} name="Tasa de ahorro" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+
+                {/* Day of Week */}
+                {advancedData?.dayOfWeek && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 mt-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Gastos por Dia de la Semana</h2>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={advancedData.dayOfWeek}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                                <Tooltip formatter={(value: any, name: string) => name === 'average' ? formatCOP(value) : name === 'count' ? `${value} transacciones` : formatCOP(value)} />
+                                <Bar dataKey="average" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Promedio" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+
+                {/* Year over Year */}
+                {advancedData?.yoyComparison && advancedData.yoyComparison.some((m: any) => m.lastYearExpense > 0) && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 mt-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Comparacion Ano vs Ano (Gastos)</h2>
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={advancedData.yoyComparison}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+                                <Tooltip formatter={(value: any) => formatCOP(value)} />
+                                <Legend wrapperStyle={{ fontSize: 12 }} />
+                                <Bar dataKey="thisYearExpense" fill="#ef4444" name="Este ano" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="lastYearExpense" fill="#94a3b8" name="Ano anterior" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
+
+                {/* Debt Projection */}
+                {advancedData?.debtProjection?.debts?.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6 mt-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-4">Proyeccion de Pago de Deudas</h2>
+                        {advancedData.debtProjection.avgMonthlyPayment > 0 && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Pago mensual promedio: {formatCOP(advancedData.debtProjection.avgMonthlyPayment)}
+                            </p>
+                        )}
+                        <div className="space-y-4">
+                            {advancedData.debtProjection.debts.map((debt: any, i: number) => {
+                                const progress = debt.totalAmount > 0 ? (debt.paidAmount / debt.totalAmount) * 100 : 0;
+                                return (
+                                    <div key={i} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-medium text-gray-900 dark:text-white">{debt.creditor}</span>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                {debt.monthsToPayoff ? `~${debt.monthsToPayoff} meses restantes` : 'Sin datos de pago'}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2">
+                                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${Math.min(progress, 100)}%` }}></div>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 dark:text-gray-400">Pagado: {formatCOP(debt.paidAmount)}</span>
+                                            <span className="text-gray-500 dark:text-gray-400">Pendiente: {formatCOP(debt.remaining)}</span>
+                                            <span className="font-medium text-gray-700 dark:text-gray-300">Total: {formatCOP(debt.totalAmount)}</span>
+                                        </div>
+                                        {debt.projectedDate && (
+                                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                                Fecha estimada de pago: {debt.projectedDate}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

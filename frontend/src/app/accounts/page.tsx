@@ -5,23 +5,35 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useToast } from '@/components/Toast';
 import Link from 'next/link';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary';
+import { accountSchema, type AccountFormData } from '@/lib/schemas';
 
 export default function AccountsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { showToast } = useToast();
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
-    const [formData, setFormData] = useState({
-        name: '',
-        type: 'CHECKING',
-        balance: '',
-        currency: 'COP'
+    const [editingAccount, setEditingAccount] = useState<any>(null);
+    const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+
+    const createForm = useForm<AccountFormData>({
+        resolver: zodResolver(accountSchema),
+        defaultValues: { name: '', type: 'CHECKING', balance: 0, currency: 'COP' }
+    });
+    const editForm = useForm<AccountFormData>({
+        resolver: zodResolver(accountSchema),
+        defaultValues: { name: '', type: 'CHECKING', currency: 'COP' }
     });
     const [transferData, setTransferData] = useState({
         fromAccountId: '',
@@ -29,35 +41,93 @@ export default function AccountsPage() {
         amount: ''
     });
 
-    const { data: accounts, isLoading } = useQuery({
+    const accountsQuery = useQuery({
         queryKey: ['accounts'],
         queryFn: () => api.getAccounts(),
         enabled: isAuthenticated
     });
+    const accounts = accountsQuery.data;
 
     const createMutation = useMutation({
         mutationFn: (data: any) => api.createAccount(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
             setShowCreateModal(false);
-            setFormData({ name: '', type: 'CHECKING', balance: '', currency: 'COP' });
-        }
+            createForm.reset({ name: '', type: 'CHECKING', balance: 0, currency: 'COP' });
+            showToast('Cuenta creada exitosamente', 'success');
+        },
+        onError: (err: any) => showToast(err?.message || 'Error al crear la cuenta', 'error')
     });
+
+    const handleCreate = createForm.handleSubmit((data) => {
+        createMutation.mutate({
+            name: data.name,
+            type: data.type,
+            balance: data.balance ?? 0,
+            currency: data.currency
+        });
+    });
+
+    const handleEdit = editForm.handleSubmit((data) => {
+        if (!editingAccount) return;
+        updateMutation.mutate({
+            id: editingAccount.id,
+            data: { name: data.name, type: data.type, currency: data.currency }
+        });
+    });
+
+    const openEditModal = (account: any) => {
+        editForm.reset({
+            name: account.name,
+            type: account.type,
+            currency: account.currency
+        });
+        setEditingAccount({ id: account.id });
+    };
 
     const transferMutation = useMutation({
         mutationFn: (data: any) => api.createTransfer(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['transfers'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             setShowTransferModal(false);
             setTransferData({ fromAccountId: '', toAccountId: '', amount: '' });
-        }
+            showToast('Transferencia realizada', 'success');
+        },
+        onError: () => showToast('Error al transferir', 'error')
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) => api.updateAccount(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            setEditingAccount(null);
+            showToast('Cuenta actualizada', 'success');
+        },
+        onError: (err: any) => showToast(err?.message || 'Error al actualizar la cuenta', 'error')
     });
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.deleteAccount(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
-        }
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            showToast('Cuenta eliminada', 'success');
+        },
+        onError: () => showToast('Error al eliminar la cuenta', 'error')
     });
 
     if (authLoading || !isAuthenticated) {
@@ -67,11 +137,6 @@ export default function AccountsPage() {
             </div>
         );
     }
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        createMutation.mutate(formData);
-    };
 
     const handleTransfer = (e: React.FormEvent) => {
         e.preventDefault();
@@ -119,13 +184,21 @@ export default function AccountsPage() {
                 <p className="text-xs sm:text-sm opacity-75 mt-1 sm:mt-2">{accounts?.length || 0} cuenta(s)</p>
             </div>
 
-            {isLoading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
-            ) : accounts && accounts.length > 0 ? (
+            <QueryStateBoundary
+                query={accountsQuery}
+                emptyState={
+                    <div className="text-center py-12">
+                        <p className="text-3xl sm:text-4xl mb-4">💳</p>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">No tienes cuentas bancarias</p>
+                        <Button onClick={() => setShowCreateModal(true)}>
+                            Crear Primera Cuenta
+                        </Button>
+                    </div>
+                }
+            >
+                {(accountsList: any[]) => (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    {accounts.map((account: any) => (
+                    {accountsList.map((account: any) => (
                         <Card key={account.id} padding="md" hover>
                             <div className="flex justify-between items-start mb-3 sm:mb-4">
                                 <div className="flex items-center gap-2 sm:gap-3">
@@ -135,13 +208,22 @@ export default function AccountsPage() {
                                         <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{account.type}</p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => deleteMutation.mutate(account.id)}
-                                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1"
-                                    aria-label="Eliminar cuenta"
-                                >
-                                    🗑️
-                                </button>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => openEditModal(account)}
+                                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 p-1"
+                                        aria-label={`Editar cuenta ${account.name}`}
+                                    >
+                                        ✏️
+                                    </button>
+                                    <button
+                                        onClick={() => setConfirmDelete({ id: account.id, name: account.name })}
+                                        className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1"
+                                        aria-label={`Eliminar cuenta ${account.name}`}
+                                    >
+                                        🗑️
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="border-t border-gray-100 dark:border-gray-700 pt-3 sm:pt-4">
@@ -160,76 +242,114 @@ export default function AccountsPage() {
                         </Card>
                     ))}
                 </div>
-            ) : (
-                <div className="text-center py-12">
-                    <p className="text-3xl sm:text-4xl mb-4">💳</p>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">No tienes cuentas bancarias</p>
-                    <Button onClick={() => setShowCreateModal(true)}>
-                        Crear Primera Cuenta
-                    </Button>
-                </div>
-            )}
+                )}
+            </QueryStateBoundary>
+
+            {/* Edit Modal */}
+            <Modal isOpen={!!editingAccount} onClose={() => setEditingAccount(null)} title="Editar Cuenta">
+                {editingAccount && (
+                    <form onSubmit={handleEdit} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nombre</label>
+                            <input
+                                type="text"
+                                {...editForm.register('name')}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            />
+                            {editForm.formState.errors.name && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.name.message}</p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tipo</label>
+                            <select
+                                {...editForm.register('type')}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            >
+                                <option value="CHECKING">Cuenta Corriente</option>
+                                <option value="SAVINGS">Cuenta de Ahorros</option>
+                                <option value="CREDIT_CARD">Tarjeta de Crédito</option>
+                                <option value="CASH">Efectivo</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Moneda</label>
+                            <select
+                                {...editForm.register('currency')}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            >
+                                <option value="COP">COP - Peso Colombiano</option>
+                                <option value="USD">USD - Dólar</option>
+                                <option value="EUR">EUR - Euro</option>
+                            </select>
+                        </div>
+
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" onClick={() => setEditingAccount(null)}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" disabled={updateMutation.isPending}>
+                                {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
+                            </Button>
+                        </ModalFooter>
+                    </form>
+                )}
+            </Modal>
 
             {/* Create Modal */}
             <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Nueva Cuenta Bancaria">
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleCreate} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Nombre de la Cuenta
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nombre de la Cuenta</label>
                         <input
                             type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            required
+                            {...createForm.register('name')}
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
                             placeholder="Ej: Cuenta Corriente Bancolombia"
                         />
+                        {createForm.formState.errors.name && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.name.message}</p>
+                        )}
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Tipo de Cuenta
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tipo de Cuenta</label>
                         <select
-                            value={formData.type}
-                            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                            {...createForm.register('type')}
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
                         >
                             <option value="CHECKING">🏦 Cuenta Corriente</option>
                             <option value="SAVINGS">💰 Cuenta de Ahorros</option>
-                            <option value="CREDIT_CARD">💳 Tarjeta de Credito</option>
+                            <option value="CREDIT_CARD">💳 Tarjeta de Crédito</option>
                             <option value="CASH">💵 Efectivo</option>
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Balance Inicial
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Balance Inicial</label>
                         <input
                             type="number"
-                            value={formData.balance}
-                            onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
-                            required
+                            {...createForm.register('balance', { valueAsNumber: true })}
                             min="0"
                             step="1"
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
-                            placeholder="21250"
+                            placeholder="0"
                         />
+                        {createForm.formState.errors.balance && (
+                            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.balance.message}</p>
+                        )}
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Moneda
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Moneda</label>
                         <select
-                            value={formData.currency}
-                            onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                            {...createForm.register('currency')}
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
                         >
                             <option value="COP">COP - Peso Colombiano</option>
-                            <option value="USD">USD - Dolar</option>
+                            <option value="USD">USD - Dólar</option>
                             <option value="EUR">EUR - Euro</option>
                         </select>
                     </div>
@@ -312,6 +432,20 @@ export default function AccountsPage() {
                     </ModalFooter>
                 </form>
             </Modal>
+
+            <ConfirmModal
+                isOpen={confirmDelete !== null}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => {
+                    if (confirmDelete) deleteMutation.mutate(confirmDelete.id);
+                    setConfirmDelete(null);
+                }}
+                title="Eliminar cuenta"
+                message={`¿Seguro que quieres eliminar la cuenta "${confirmDelete?.name}"? Esta acción no se puede deshacer.`}
+                confirmLabel="Eliminar"
+                variant="danger"
+                isPending={deleteMutation.isPending}
+            />
         </div>
     );
 }

@@ -4,9 +4,14 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { useToast } from '@/components/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary';
+import { categorizationRuleSchema, type CategorizationRuleFormData } from '@/lib/schemas';
 
 const MATCH_TYPES = [
     { value: 'CONTAINS', label: 'Contiene' },
@@ -22,11 +27,12 @@ export default function CategorizationRulesPage() {
 
     const [showModal, setShowModal] = useState(false);
     const [editingRule, setEditingRule] = useState<any>(null);
-    const [formData, setFormData] = useState({
-        pattern: '',
-        matchType: 'CONTAINS',
-        categoryId: '',
-        priority: 0,
+    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+    const [confirmMessage, setConfirmMessage] = useState('');
+
+    const ruleForm = useForm<CategorizationRuleFormData>({
+        resolver: zodResolver(categorizationRuleSchema),
+        defaultValues: { pattern: '', matchType: 'CONTAINS', categoryId: '', priority: 0 }
     });
 
     useEffect(() => {
@@ -35,11 +41,12 @@ export default function CategorizationRulesPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data: rules, isLoading } = useQuery({
+    const rulesQuery = useQuery({
         queryKey: ['categorization-rules'],
         queryFn: () => api.getCategorizationRules(),
         enabled: isAuthenticated,
     });
+    const rules = rulesQuery.data;
 
     const { data: categories } = useQuery({
         queryKey: ['categories'],
@@ -55,7 +62,7 @@ export default function CategorizationRulesPage() {
             resetForm();
             showToast('Regla creada exitosamente', 'success');
         },
-        onError: () => showToast('Error al crear la regla', 'error'),
+        onError: (err: any) => showToast(err?.message || 'Error al crear la regla', 'error'),
     });
 
     const updateMutation = useMutation({
@@ -67,7 +74,7 @@ export default function CategorizationRulesPage() {
             resetForm();
             showToast('Regla actualizada', 'success');
         },
-        onError: () => showToast('Error al actualizar la regla', 'error'),
+        onError: (err: any) => showToast(err?.message || 'Error al actualizar la regla', 'error'),
     });
 
     const deleteMutation = useMutation({
@@ -76,7 +83,7 @@ export default function CategorizationRulesPage() {
             queryClient.invalidateQueries({ queryKey: ['categorization-rules'] });
             showToast('Regla eliminada', 'success');
         },
-        onError: () => showToast('Error al eliminar la regla', 'error'),
+        onError: (err: any) => showToast(err?.message || 'Error al eliminar la regla', 'error'),
     });
 
     const toggleMutation = useMutation({
@@ -88,8 +95,16 @@ export default function CategorizationRulesPage() {
     });
 
     const resetForm = () => {
-        setFormData({ pattern: '', matchType: 'CONTAINS', categoryId: '', priority: 0 });
+        ruleForm.reset({ pattern: '', matchType: 'CONTAINS', categoryId: '', priority: 0 });
     };
+
+    const handleFormSubmit = ruleForm.handleSubmit((data) => {
+        if (editingRule) {
+            updateMutation.mutate({ id: editingRule.id, data });
+        } else {
+            createMutation.mutate(data);
+        }
+    });
 
     const openCreate = () => {
         setEditingRule(null);
@@ -99,22 +114,13 @@ export default function CategorizationRulesPage() {
 
     const openEdit = (rule: any) => {
         setEditingRule(rule);
-        setFormData({
+        ruleForm.reset({
             pattern: rule.pattern,
             matchType: rule.matchType,
             categoryId: rule.categoryId,
             priority: rule.priority,
         });
         setShowModal(true);
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (editingRule) {
-            updateMutation.mutate({ id: editingRule.id, data: formData });
-        } else {
-            createMutation.mutate(formData);
-        }
     };
 
     if (authLoading || !isAuthenticated) {
@@ -156,13 +162,25 @@ export default function CategorizationRulesPage() {
                         </div>
                     </div>
 
-                    {isLoading ? (
-                        <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                        </div>
-                    ) : rules && rules.length > 0 ? (
+                    <QueryStateBoundary
+                        query={rulesQuery}
+                        emptyState={
+                            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                                <p className="text-5xl mb-4">📋</p>
+                                <p className="text-lg mb-2">No hay reglas creadas</p>
+                                <p className="text-sm mb-4">Crea tu primera regla para categorizar automáticamente</p>
+                                <button
+                                    onClick={openCreate}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition"
+                                >
+                                    + Crear Regla
+                                </button>
+                            </div>
+                        }
+                    >
+                        {(rulesList: any[]) => (
                         <div className="space-y-3">
-                            {rules.map((rule: any) => (
+                            {rulesList.map((rule: any) => (
                                 <div
                                     key={rule.id}
                                     className={`flex items-center justify-between p-4 rounded-lg border transition ${
@@ -210,9 +228,8 @@ export default function CategorizationRulesPage() {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                if (confirm('¿Eliminar esta regla?')) {
-                                                    deleteMutation.mutate(rule.id);
-                                                }
+                                                setConfirmMessage('¿Eliminar esta regla?');
+                                                setConfirmAction(() => () => deleteMutation.mutate(rule.id));
                                             }}
                                             className="p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition"
                                             aria-label="Eliminar regla"
@@ -223,19 +240,8 @@ export default function CategorizationRulesPage() {
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                            <p className="text-5xl mb-4">📋</p>
-                            <p className="text-lg mb-2">No hay reglas creadas</p>
-                            <p className="text-sm mb-4">Crea tu primera regla para categorizar automaticamente</p>
-                            <button
-                                onClick={openCreate}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition"
-                            >
-                                + Crear Regla
-                            </button>
-                        </div>
-                    )}
+                        )}
+                    </QueryStateBoundary>
                 </div>
             </main>
 
@@ -246,27 +252,27 @@ export default function CategorizationRulesPage() {
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
                             {editingRule ? '✏️ Editar Regla' : '➕ Nueva Regla'}
                         </h2>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleFormSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Patron de texto
+                                    Patrón de texto
                                 </label>
                                 <input
                                     type="text"
-                                    value={formData.pattern}
-                                    onChange={(e) => setFormData({ ...formData, pattern: e.target.value })}
-                                    required
+                                    {...ruleForm.register('pattern')}
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     placeholder='Ej: "Rappi", "Uber", "Mercado"'
                                 />
+                                {ruleForm.formState.errors.pattern && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{ruleForm.formState.errors.pattern.message}</p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Tipo de coincidencia
                                 </label>
                                 <select
-                                    value={formData.matchType}
-                                    onChange={(e) => setFormData({ ...formData, matchType: e.target.value })}
+                                    {...ruleForm.register('matchType')}
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 >
                                     {MATCH_TYPES.map(m => (
@@ -276,12 +282,10 @@ export default function CategorizationRulesPage() {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Categoria destino
+                                    Categoría destino
                                 </label>
                                 <select
-                                    value={formData.categoryId}
-                                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                                    required
+                                    {...ruleForm.register('categoryId')}
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 >
                                     <option value="">Selecciona una categoria</option>
@@ -294,15 +298,17 @@ export default function CategorizationRulesPage() {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Prioridad (menor = mas alta)
+                                    Prioridad (menor = más alta)
                                 </label>
                                 <input
                                     type="number"
-                                    value={formData.priority}
-                                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
+                                    {...ruleForm.register('priority', { valueAsNumber: true })}
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     min="0"
                                 />
+                                {ruleForm.formState.errors.categoryId && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{ruleForm.formState.errors.categoryId.message}</p>
+                                )}
                             </div>
                             <div className="flex gap-3 pt-2">
                                 <button
@@ -324,6 +330,15 @@ export default function CategorizationRulesPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                isOpen={!!confirmAction}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={() => confirmAction?.()}
+                message={confirmMessage}
+                confirmLabel="Eliminar"
+                variant="danger"
+            />
         </div>
     );
 }

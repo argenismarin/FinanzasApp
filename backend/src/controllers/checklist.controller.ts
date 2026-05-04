@@ -142,6 +142,7 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
         const { id } = req.params;
         const userId = req.user!.id;
         const { month, year } = req.query;
+        const { accountId } = req.body || {};
 
         const item = await prisma.checklistItem.findFirst({
             where: { id, userId },
@@ -173,6 +174,15 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
                 // Unmark as completed - delete transaction if exists (atomic transaction)
                 const result = await prisma.$transaction(async (tx) => {
                     if (existingCompletion.transactionId) {
+                        // Revert bank account balance if transaction was linked to one
+                        const linkedTx = existingCompletion.transaction;
+                        if (linkedTx?.accountId) {
+                            await tx.bankAccount.update({
+                                where: { id: linkedTx.accountId },
+                                data: { balance: { increment: Number(linkedTx.amount) } }
+                            });
+                        }
+
                         await tx.transaction.delete({
                             where: { id: existingCompletion.transactionId }
                         });
@@ -203,9 +213,18 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
                             date: new Date(),
                             categoryId: item.categoryId,
                             currency: 'COP',
+                            accountId: accountId || null,
                             createdBy: userId
                         }
                     });
+
+                    // Debit bank account if provided
+                    if (accountId) {
+                        await tx.bankAccount.update({
+                            where: { id: accountId },
+                            data: { balance: { decrement: Number(item.amount) } }
+                        });
+                    }
 
                     const updated = await tx.checklistCompletion.update({
                         where: { id: existingCompletion.id },
@@ -233,9 +252,18 @@ export const toggleChecklistItem = async (req: AuthRequest, res: Response) => {
                         date: new Date(),
                         categoryId: item.categoryId,
                         currency: 'COP',
+                        accountId: accountId || null,
                         createdBy: userId
                     }
                 });
+
+                // Debit bank account if provided
+                if (accountId) {
+                    await tx.bankAccount.update({
+                        where: { id: accountId },
+                        data: { balance: { decrement: Number(item.amount) } }
+                    });
+                }
 
                 const completion = await tx.checklistCompletion.create({
                     data: {

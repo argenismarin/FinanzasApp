@@ -2,23 +2,36 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import CurrencyInput from '@/components/CurrencyInput';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary';
+import ExportMenu from '@/components/ExportMenu';
+import { savingSchema, type SavingFormData } from '@/lib/schemas';
 
 export default function SavingsPage() {
     const router = useRouter();
     const { isAuthenticated, loading: authLoading } = useAuth();
     const { showToast } = useToast();
+    const queryClient = useQueryClient();
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingSaving, setEditingSaving] = useState<any>(null);
     const [withdrawModal, setWithdrawModal] = useState<{ saving: any; amount: string } | null>(null);
-    const [newSaving, setNewSaving] = useState({
-        name: '',
-        amount: '',
-        purpose: '',
+    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+    const [confirmMessage, setConfirmMessage] = useState('');
+
+    const createForm = useForm<SavingFormData>({
+        resolver: zodResolver(savingSchema),
+        defaultValues: { name: '', amount: 0, purpose: '' }
+    });
+    const editForm = useForm<SavingFormData>({
+        resolver: zodResolver(savingSchema),
+        defaultValues: { name: '', amount: 0, purpose: '' }
     });
 
     useEffect(() => {
@@ -27,29 +40,68 @@ export default function SavingsPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data: savingsData, isLoading, refetch } = useQuery({
+    const savingsQuery = useQuery({
         queryKey: ['savings'],
         queryFn: () => api.getSavings(),
         enabled: isAuthenticated,
     });
 
+    const invalidateSavingsQueries = () => {
+        queryClient.invalidateQueries({ queryKey: ['savings'] });
+        queryClient.invalidateQueries({ queryKey: ['balance'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
+    };
+
     const createMutation = useMutation({
         mutationFn: (data: any) => api.createSaving(data),
         onSuccess: () => {
-            refetch();
+            invalidateSavingsQueries();
             setShowAddForm(false);
-            setNewSaving({ name: '', amount: '', purpose: '' });
+            createForm.reset({ name: '', amount: 0, purpose: '' });
             showToast('Ahorro registrado exitosamente', 'success');
         },
-        onError: () => {
-            showToast('Error al registrar ahorro', 'error');
+        onError: (err: any) => {
+            showToast(err?.message || 'Error al registrar ahorro', 'error');
         },
     });
+
+    const handleCreate = createForm.handleSubmit((data) => {
+        createMutation.mutate({
+            name: data.name,
+            amount: data.amount,
+            purpose: data.purpose || null
+        });
+    });
+
+    const handleEdit = editForm.handleSubmit((data) => {
+        if (!editingSaving) return;
+        updateMutation.mutate({
+            id: editingSaving.id,
+            data: {
+                name: data.name,
+                amount: data.amount,
+                purpose: data.purpose || null
+            }
+        });
+    });
+
+    const openEditModal = (saving: any) => {
+        editForm.reset({
+            name: saving.name,
+            amount: Number(saving.amount),
+            purpose: saving.purpose || ''
+        });
+        setEditingSaving({ id: saving.id });
+    };
 
     const updateMutation = useMutation({
         mutationFn: ({ id, data }: { id: string; data: any }) => api.updateSaving(id, data),
         onSuccess: () => {
-            refetch();
+            invalidateSavingsQueries();
             setEditingSaving(null);
             showToast('Ahorro actualizado correctamente', 'success');
         },
@@ -61,7 +113,7 @@ export default function SavingsPage() {
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.deleteSaving(id),
         onSuccess: () => {
-            refetch();
+            invalidateSavingsQueries();
             showToast('Ahorro eliminado correctamente', 'success');
         },
         onError: () => {
@@ -72,7 +124,7 @@ export default function SavingsPage() {
     const withdrawMutation = useMutation({
         mutationFn: ({ id, amount }: { id: string; amount: number }) => api.withdrawFromSaving(id, { amount }),
         onSuccess: (data) => {
-            refetch();
+            invalidateSavingsQueries();
             setWithdrawModal(null);
             showToast(`Retiro exitoso: ${formatCOP(data.withdrawnAmount)}`, 'success');
         },
@@ -103,10 +155,10 @@ export default function SavingsPage() {
         }).format(amount);
     };
 
-    const savings = Array.isArray(savingsData) ? savingsData : [];
+    const savings = Array.isArray(savingsQuery.data) ? savingsQuery.data : [];
     const totalSavings = savings.reduce((sum, saving) => sum + parseFloat(saving.amount), 0);
 
-    if (authLoading || isLoading) {
+    if (authLoading) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
                 <p className="text-gray-600 dark:text-gray-400">Cargando...</p>
@@ -140,10 +192,11 @@ export default function SavingsPage() {
                             <p className="text-sm text-gray-600 dark:text-gray-400">Cajitas / Bolsillos</p>
                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{savings.length}</p>
                         </div>
-                        <div>
+                        <div className="flex items-center gap-2 justify-end">
+                            <ExportMenu type="savings" />
                             <button
                                 onClick={() => setShowAddForm(!showAddForm)}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold"
+                                className="bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-semibold"
                             >
                                 + Nuevo Ahorro
                             </button>
@@ -155,44 +208,57 @@ export default function SavingsPage() {
                 {showAddForm && (
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Nuevo Ahorro</h3>
-                        <div className="space-y-4">
-                            <input
-                                type="text"
-                                placeholder="Nombre (ej: Cajita roja, Bolsillo secreto)"
-                                value={newSaving.name}
-                                onChange={(e) => setNewSaving({ ...newSaving, name: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            />
-                            <input
-                                type="number"
-                                placeholder="Monto guardado"
-                                value={newSaving.amount}
-                                onChange={(e) => setNewSaving({ ...newSaving, amount: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            />
-                            <textarea
-                                placeholder="Propósito (opcional)"
-                                value={newSaving.purpose}
-                                onChange={(e) => setNewSaving({ ...newSaving, purpose: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                rows={2}
-                            />
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div>
+                                <input
+                                    type="text"
+                                    placeholder="Nombre (ej: Cajita roja, Bolsillo secreto)"
+                                    {...createForm.register('name')}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                {createForm.formState.errors.name && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.name.message}</p>
+                                )}
+                            </div>
+                            <div>
+                                <input
+                                    type="number"
+                                    placeholder="Monto guardado"
+                                    {...createForm.register('amount', { valueAsNumber: true })}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                {createForm.formState.errors.amount && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.amount.message}</p>
+                                )}
+                            </div>
+                            <div>
+                                <textarea
+                                    placeholder="Propósito (opcional)"
+                                    {...createForm.register('purpose')}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    rows={2}
+                                />
+                                {createForm.formState.errors.purpose && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.purpose.message}</p>
+                                )}
+                            </div>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => createMutation.mutate(newSaving)}
-                                    disabled={!newSaving.name || !newSaving.amount || createMutation.isPending}
+                                    type="submit"
+                                    disabled={createMutation.isPending}
                                     className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg disabled:opacity-50"
                                 >
                                     {createMutation.isPending ? 'Guardando...' : 'Guardar'}
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setShowAddForm(false)}
                                     className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg"
                                 >
                                     Cancelar
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 )}
 
@@ -200,50 +266,54 @@ export default function SavingsPage() {
                 {editingSaving && (
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mb-6">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">✏️ Editar Ahorro</h3>
-                        <div className="space-y-4">
-                            <input
-                                type="text"
-                                placeholder="Nombre"
-                                value={editingSaving.name}
-                                onChange={(e) => setEditingSaving({ ...editingSaving, name: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            />
-                            <input
-                                type="number"
-                                placeholder="Monto"
-                                value={editingSaving.amount}
-                                onChange={(e) => setEditingSaving({ ...editingSaving, amount: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            />
-                            <textarea
-                                placeholder="Propósito"
-                                value={editingSaving.purpose || ''}
-                                onChange={(e) => setEditingSaving({ ...editingSaving, purpose: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                rows={2}
-                            />
+                        <form onSubmit={handleEdit} className="space-y-4">
+                            <div>
+                                <input
+                                    type="text"
+                                    placeholder="Nombre"
+                                    {...editForm.register('name')}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                {editForm.formState.errors.name && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.name.message}</p>
+                                )}
+                            </div>
+                            <div>
+                                <input
+                                    type="number"
+                                    placeholder="Monto"
+                                    {...editForm.register('amount', { valueAsNumber: true })}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                {editForm.formState.errors.amount && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.amount.message}</p>
+                                )}
+                            </div>
+                            <div>
+                                <textarea
+                                    placeholder="Propósito"
+                                    {...editForm.register('purpose')}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg min-h-[48px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    rows={2}
+                                />
+                            </div>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => updateMutation.mutate({
-                                        id: editingSaving.id,
-                                        data: {
-                                            name: editingSaving.name,
-                                            amount: parseFloat(editingSaving.amount),
-                                            purpose: editingSaving.purpose
-                                        }
-                                    })}
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
+                                    type="submit"
+                                    disabled={updateMutation.isPending}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg disabled:opacity-50"
                                 >
-                                    Actualizar
+                                    {updateMutation.isPending ? 'Actualizando...' : 'Actualizar'}
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setEditingSaving(null)}
                                     className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg"
                                 >
                                     Cancelar
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 )}
 
@@ -260,10 +330,7 @@ export default function SavingsPage() {
                                         <h3 className="font-bold text-lg text-gray-900 dark:text-white">💰 {saving.name}</h3>
                                         <div className="flex gap-1">
                                             <button
-                                                onClick={() => setEditingSaving({
-                                                    ...saving,
-                                                    amount: saving.amount.toString()
-                                                })}
+                                                onClick={() => openEditModal(saving)}
                                                 className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                 title="Editar"
                                                 aria-label={`Editar ahorro ${saving.name}`}
@@ -272,9 +339,8 @@ export default function SavingsPage() {
                                             </button>
                                             <button
                                                 onClick={() => {
-                                                    if (confirm('¿Eliminar este ahorro?')) {
-                                                        deleteMutation.mutate(saving.id);
-                                                    }
+                                                    setConfirmMessage('¿Eliminar este ahorro?');
+                                                    setConfirmAction(() => () => deleteMutation.mutate(saving.id));
                                                 }}
                                                 className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                 title="Eliminar"
@@ -356,6 +422,15 @@ export default function SavingsPage() {
                         </div>
                     </div>
                 )}
+
+                <ConfirmModal
+                    isOpen={!!confirmAction}
+                    onClose={() => setConfirmAction(null)}
+                    onConfirm={() => confirmAction?.()}
+                    message={confirmMessage}
+                    confirmLabel="Eliminar"
+                    variant="danger"
+                />
             </div>
         </div>
     );

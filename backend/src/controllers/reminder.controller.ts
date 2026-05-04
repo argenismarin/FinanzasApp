@@ -110,11 +110,13 @@ export const createPaymentReminder = async (req: AuthRequest, res: Response) => 
 export const markAsPaid = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
+        const { accountId } = req.body || {};
         const userId = req.user!.id;
         const userRole = req.user!.role;
 
         const reminder = await prisma.paymentReminder.findUnique({
-            where: { id }
+            where: { id },
+            include: { category: true }
         });
 
         if (!reminder) {
@@ -125,15 +127,48 @@ export const markAsPaid = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ error: 'Forbidden' });
         }
 
-        const updatedReminder = await prisma.paymentReminder.update({
-            where: { id },
-            data: {
-                isPaid: true,
-                lastPaidDate: new Date()
-            },
-            include: {
-                category: true
+        // Validate bank account if provided
+        if (accountId) {
+            const account = await prisma.bankAccount.findFirst({
+                where: { id: accountId, userId }
+            });
+            if (!account) {
+                return res.status(404).json({ error: 'Bank account not found' });
             }
+        }
+
+        const updatedReminder = await prisma.$transaction(async (tx) => {
+            // Create expense transaction for this payment
+            await tx.transaction.create({
+                data: {
+                    userId,
+                    type: 'EXPENSE',
+                    amount: reminder.amount,
+                    categoryId: reminder.categoryId,
+                    description: `Pago: ${reminder.name}`,
+                    date: new Date(),
+                    accountId: accountId || null,
+                    createdBy: userId
+                }
+            });
+
+            // Debit bank account if provided
+            if (accountId) {
+                await tx.bankAccount.update({
+                    where: { id: accountId },
+                    data: { balance: { decrement: Number(reminder.amount) } }
+                });
+            }
+
+            // Mark reminder as paid
+            return tx.paymentReminder.update({
+                where: { id },
+                data: {
+                    isPaid: true,
+                    lastPaidDate: new Date()
+                },
+                include: { category: true }
+            });
         });
 
         res.json(updatedReminder);

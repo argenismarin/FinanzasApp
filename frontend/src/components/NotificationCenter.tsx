@@ -141,10 +141,11 @@ export default function NotificationCenter() {
             {/* Bell Icon Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 rounded-lg hover:bg-gray-100 transition"
+                className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 title="Notificaciones"
+                aria-label={unreadCount > 0 ? `Notificaciones (${unreadCount} sin leer)` : 'Notificaciones'}
             >
-                <span className="text-2xl">🔔</span>
+                <span className="text-2xl" aria-hidden="true">🔔</span>
                 {unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                         {unreadCount > 9 ? '9+' : unreadCount}
@@ -162,7 +163,7 @@ export default function NotificationCenter() {
                     />
 
                     {/* Dropdown Panel */}
-                    <div className="absolute right-0 mt-2 w-96 max-h-[600px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-50">
+                    <div className="absolute right-0 mt-2 w-96 max-h-[600px] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
                         {/* Header */}
                         <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 text-white">
                             <div className="flex justify-between items-center">
@@ -188,21 +189,21 @@ export default function NotificationCenter() {
                             {isLoading ? (
                                 <div className="p-8 text-center">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                                    <p className="text-gray-500 text-sm mt-2">Cargando...</p>
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">Cargando...</p>
                                 </div>
                             ) : notifications.length === 0 ? (
                                 <div className="p-8 text-center">
                                     <span className="text-5xl">🎉</span>
-                                    <p className="text-gray-600 mt-2">No tienes notificaciones</p>
-                                    <p className="text-gray-400 text-sm">Estás al día con todo</p>
+                                    <p className="text-gray-600 dark:text-gray-400 mt-2">No tienes notificaciones</p>
+                                    <p className="text-gray-400 dark:text-gray-500 text-sm">Estás al día con todo</p>
                                 </div>
                             ) : (
-                                <div className="divide-y divide-gray-100">
+                                <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                     {notifications.map((notification: Notification) => (
                                         <div
                                             key={notification.id}
-                                            className={`p-4 hover:bg-gray-50 transition cursor-pointer ${
-                                                !notification.isRead ? 'bg-blue-50/50' : ''
+                                            className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition cursor-pointer ${
+                                                !notification.isRead ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''
                                             }`}
                                             onClick={() => handleNotificationClick(notification)}
                                         >
@@ -213,7 +214,7 @@ export default function NotificationCenter() {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between items-start mb-1">
                                                         <p className={`text-sm font-semibold ${
-                                                            !notification.isRead ? 'text-blue-900' : 'text-gray-900'
+                                                            !notification.isRead ? 'text-blue-900 dark:text-blue-300' : 'text-gray-900 dark:text-white'
                                                         }`}>
                                                             {notification.title}
                                                         </p>
@@ -221,11 +222,11 @@ export default function NotificationCenter() {
                                                             <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                                                         )}
                                                     </div>
-                                                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
                                                         {notification.message}
                                                     </p>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-xs text-gray-500">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
                                                             {getTimeAgo(notification.createdAt)}
                                                         </span>
                                                         <button

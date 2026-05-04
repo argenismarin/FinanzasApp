@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
@@ -34,6 +34,7 @@ export default function ImportTransactionsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const { showToast } = useToast();
+    const queryClient = useQueryClient();
 
     const [step, setStep] = useState(1);
     const [rawData, setRawData] = useState<any[]>([]);
@@ -250,6 +251,15 @@ export default function ImportTransactionsPage() {
             const res = await api.bulkCreateTransactions(transactions);
             setResult(res);
             setStep(4);
+            // Invalidate all related queries after bulk import
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+            queryClient.invalidateQueries({ queryKey: ['analytics'] });
             showToast(`${res.created} transacciones importadas`, 'success');
         } catch (error) {
             showToast('Error al importar transacciones', 'error');

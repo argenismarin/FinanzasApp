@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { TransactionType } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
 import prisma from '../lib/prisma';
 
 interface AuthRequest extends Request {
@@ -16,37 +16,42 @@ export const getAnalyticsOverview = async (req: AuthRequest, res: Response) => {
         const userId = req.user!.id;
         const { startDate, endDate } = req.query;
 
-        const where: any = { userId };
-        if (startDate && endDate) {
-            where.date = {
-                gte: new Date(startDate as string),
-                lte: new Date(endDate as string)
-            };
-        }
+        // Use raw SQL to group by month and type directly in the database
+        const dateFilter = startDate && endDate
+            ? Prisma.sql`AND date >= ${new Date(startDate as string)} AND date <= ${new Date(endDate as string)}`
+            : Prisma.empty;
 
-        // Get monthly trends
-        const transactions = await prisma.transaction.findMany({
-            where,
-            orderBy: { date: 'asc' }
-        });
+        const rawResults = await prisma.$queryRaw<
+            Array<{ month: string; type: string; total: any }>
+        >(Prisma.sql`
+            SELECT
+                TO_CHAR(date, 'YYYY-MM') as month,
+                type,
+                SUM(amount) as total
+            FROM transactions
+            WHERE user_id = ${userId}
+            ${dateFilter}
+            GROUP BY TO_CHAR(date, 'YYYY-MM'), type
+            ORDER BY month ASC
+        `);
 
-        const monthlyData: any = {};
-        transactions.forEach(t => {
-            const month = t.date.toISOString().substring(0, 7);
-            if (!monthlyData[month]) {
-                monthlyData[month] = { income: 0, expense: 0 };
+        // Transform raw results into the expected format: [{ month, income, expense }]
+        const monthlyData: Record<string, { income: number; expense: number }> = {};
+        rawResults.forEach(row => {
+            if (!monthlyData[row.month]) {
+                monthlyData[row.month] = { income: 0, expense: 0 };
             }
-            if (t.type === 'INCOME') {
-                monthlyData[month].income += Number(t.amount);
+            if (row.type === 'INCOME') {
+                monthlyData[row.month].income = Number(row.total);
             } else {
-                monthlyData[month].expense += Number(t.amount);
+                monthlyData[row.month].expense = Number(row.total);
             }
         });
 
         const monthlyTrends = Object.entries(monthlyData).map(([month, data]) => ({
             month,
-            income: (data as any).income,
-            expense: (data as any).expense
+            income: data.income,
+            expense: data.expense
         }));
 
         res.json({ monthlyTrends });
@@ -73,29 +78,36 @@ export const getCategoryBreakdown = async (req: AuthRequest, res: Response) => {
             };
         }
 
-        const transactions = await prisma.transaction.findMany({
+        // Use groupBy to aggregate amounts per category in the database
+        const groupedResults = await prisma.transaction.groupBy({
+            by: ['categoryId'],
             where,
-            include: { category: true }
+            _sum: { amount: true }
         });
 
-        const categoryData: any = {};
+        // Fetch category details for the categories that have transactions
+        const categoryIds = groupedResults.map(r => r.categoryId);
+        const categories = await prisma.category.findMany({
+            where: { id: { in: categoryIds } },
+            select: { id: true, name: true, icon: true }
+        });
+
+        const categoryMap = new Map(categories.map(c => [c.id, c]));
+
+        // Calculate total for percentage computation
         let total = 0;
-
-        transactions.forEach(t => {
-            const catName = t.category.name;
-            const amount = Number(t.amount);
-            if (!categoryData[catName]) {
-                categoryData[catName] = {
-                    name: catName,
-                    icon: t.category.icon,
-                    total: 0
-                };
-            }
-            categoryData[catName].total += amount;
+        const categoryData = groupedResults.map(r => {
+            const amount = Number(r._sum.amount);
             total += amount;
+            const cat = categoryMap.get(r.categoryId);
+            return {
+                name: cat?.name ?? 'Sin categoría',
+                icon: cat?.icon ?? '',
+                total: amount
+            };
         });
 
-        const breakdown = Object.values(categoryData).map((cat: any) => ({
+        const breakdown = categoryData.map(cat => ({
             name: cat.name,
             icon: cat.icon,
             total: cat.total,
@@ -120,26 +132,29 @@ export const getTopCategories = async (req: AuthRequest, res: Response) => {
             where.type = type as TransactionType;
         }
 
-        const transactions = await prisma.transaction.findMany({
+        const takeLimit = Math.min(Math.max(parseInt(limit as string) || 5, 1), 100);
+
+        // Use groupBy to aggregate and sort in the database
+        const groupedResults = await prisma.transaction.groupBy({
+            by: ['categoryId'],
             where,
-            include: { category: true }
+            _sum: { amount: true },
+            orderBy: { _sum: { amount: 'desc' } },
+            take: takeLimit
         });
 
-        const categoryTotals: any = {};
-        transactions.forEach(t => {
-            const catId = t.categoryId;
-            if (!categoryTotals[catId]) {
-                categoryTotals[catId] = {
-                    category: t.category,
-                    total: 0
-                };
-            }
-            categoryTotals[catId].total += Number(t.amount);
+        // Fetch category details for the top N categories
+        const categoryIds = groupedResults.map(r => r.categoryId);
+        const categories = await prisma.category.findMany({
+            where: { id: { in: categoryIds } }
         });
 
-        const topCategories = Object.values(categoryTotals)
-            .sort((a: any, b: any) => b.total - a.total)
-            .slice(0, parseInt(limit as string));
+        const categoryMap = new Map(categories.map(c => [c.id, c]));
+
+        const topCategories = groupedResults.map(r => ({
+            category: categoryMap.get(r.categoryId) ?? null,
+            total: Number(r._sum.amount)
+        }));
 
         res.json(topCategories);
     } catch (error) {
@@ -668,6 +683,207 @@ export const getFinancialReport = async (req: AuthRequest, res: Response) => {
         });
     } catch (error) {
         console.error('Get financial report error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Get advanced analytics
+export const getAdvancedAnalytics = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const now = new Date();
+
+        // 1. SAVINGS RATE TREND - last 6 months
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        const allTransactions = await prisma.transaction.findMany({
+            where: { userId, date: { gte: sixMonthsAgo } },
+            orderBy: { date: 'asc' }
+        });
+
+        const monthlyMap: Record<string, { income: number; expense: number }> = {};
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            monthlyMap[key] = { income: 0, expense: 0 };
+        }
+
+        allTransactions.forEach(t => {
+            const key = t.date.toISOString().substring(0, 7);
+            if (monthlyMap[key]) {
+                if (t.type === 'INCOME') monthlyMap[key].income += Number(t.amount);
+                else monthlyMap[key].expense += Number(t.amount);
+            }
+        });
+
+        const savingsRateTrend = Object.entries(monthlyMap).map(([month, data]) => ({
+            month,
+            income: data.income,
+            expense: data.expense,
+            savings: data.income - data.expense,
+            savingsRate: data.income > 0 ? Math.round(((data.income - data.expense) / data.income) * 100) : 0
+        }));
+
+        // 2. NET WORTH TREND - snapshot each month
+        // Get current bank accounts, savings, debts
+        const [bankAccounts, savings, debts] = await Promise.all([
+            prisma.bankAccount.findMany({ where: { userId } }),
+            prisma.saving.findMany({ where: { userId } }),
+            prisma.debt.findMany({ where: { userId } })
+        ]);
+
+        const totalBankBalance = bankAccounts.reduce((sum, a) => sum + Number(a.balance), 0);
+        const totalSavings = savings.reduce((sum, s) => sum + Number(s.amount), 0);
+        const totalDebts = debts.reduce((sum, d) => sum + (Number(d.totalAmount) - Number(d.paidAmount)), 0);
+        const currentNetWorth = totalBankBalance + totalSavings - totalDebts;
+
+        // Build approximate historical net worth from cumulative monthly income-expense
+        const netWorthTrend: Array<{ month: string; netWorth: number }> = [];
+        let cumulativeBalance = currentNetWorth;
+        const monthEntries = Object.entries(monthlyMap).reverse(); // most recent first
+        for (let i = 0; i < monthEntries.length; i++) {
+            const [month, data] = monthEntries[i];
+            if (i === 0) {
+                netWorthTrend.unshift({ month, netWorth: currentNetWorth });
+            } else {
+                // Subtract this month's balance change to get previous month's net worth
+                cumulativeBalance -= (data.income - data.expense);
+                netWorthTrend.unshift({ month, netWorth: cumulativeBalance });
+            }
+        }
+
+        // 3. DAY OF WEEK ANALYSIS
+        const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+        const dayOfWeekData: Array<{ day: string; total: number; count: number; average: number }> =
+            dayNames.map(d => ({ day: d, total: 0, count: 0, average: 0 }));
+
+        allTransactions
+            .filter(t => t.type === 'EXPENSE')
+            .forEach(t => {
+                const dayIndex = new Date(t.date).getDay();
+                dayOfWeekData[dayIndex].total += Number(t.amount);
+                dayOfWeekData[dayIndex].count += 1;
+            });
+
+        dayOfWeekData.forEach(d => {
+            d.average = d.count > 0 ? Math.round(d.total / d.count) : 0;
+        });
+
+        // 4. DEBT PAYOFF PROJECTION
+        // Calculate average monthly debt payment from last 6 months
+        const debtPayments = await prisma.debtPayment.findMany({
+            where: {
+                debt: { userId },
+                paymentDate: { gte: sixMonthsAgo }
+            },
+            include: { debt: true }
+        });
+
+        const monthlyDebtPayments: Record<string, number> = {};
+        debtPayments.forEach(p => {
+            const key = p.paymentDate.toISOString().substring(0, 7);
+            monthlyDebtPayments[key] = (monthlyDebtPayments[key] || 0) + Number(p.amount);
+        });
+
+        const paymentMonths = Object.values(monthlyDebtPayments);
+        const avgMonthlyDebtPayment = paymentMonths.length > 0
+            ? paymentMonths.reduce((a, b) => a + b, 0) / paymentMonths.length
+            : 0;
+
+        const debtProjection = debts
+            .filter(d => Number(d.paidAmount) < Number(d.totalAmount))
+            .map(d => {
+                const remaining = Number(d.totalAmount) - Number(d.paidAmount);
+                // Estimate months to pay off based on proportional average payments
+                const totalDebtRemaining = totalDebts;
+                const proportionalPayment = totalDebtRemaining > 0
+                    ? (remaining / totalDebtRemaining) * avgMonthlyDebtPayment
+                    : 0;
+                const monthsToPayoff = proportionalPayment > 0
+                    ? Math.ceil(remaining / proportionalPayment)
+                    : null;
+                const projectedDate = monthsToPayoff
+                    ? new Date(now.getFullYear(), now.getMonth() + monthsToPayoff, 1).toISOString().substring(0, 7)
+                    : null;
+
+                return {
+                    creditor: d.creditor,
+                    totalAmount: Number(d.totalAmount),
+                    paidAmount: Number(d.paidAmount),
+                    remaining,
+                    monthsToPayoff,
+                    projectedDate,
+                    dueDate: d.dueDate
+                };
+            });
+
+        // 5. YEAR OVER YEAR COMPARISON
+        const lastYearStart = new Date(now.getFullYear() - 1, now.getMonth() - 5, 1);
+        const lastYearEnd = new Date(now.getFullYear() - 1, now.getMonth() + 1, 0);
+
+        const lastYearTransactions = await prisma.transaction.findMany({
+            where: {
+                userId,
+                date: { gte: lastYearStart, lte: lastYearEnd }
+            }
+        });
+
+        const lastYearMonthlyMap: Record<string, { income: number; expense: number }> = {};
+        lastYearTransactions.forEach(t => {
+            const monthNum = t.date.getMonth(); // 0-11
+            const key = String(monthNum);
+            if (!lastYearMonthlyMap[key]) lastYearMonthlyMap[key] = { income: 0, expense: 0 };
+            if (t.type === 'INCOME') lastYearMonthlyMap[key].income += Number(t.amount);
+            else lastYearMonthlyMap[key].expense += Number(t.amount);
+        });
+
+        const thisYearMonthlyMap: Record<string, { income: number; expense: number }> = {};
+        allTransactions.forEach(t => {
+            const monthNum = t.date.getMonth();
+            const key = String(monthNum);
+            if (!thisYearMonthlyMap[key]) thisYearMonthlyMap[key] = { income: 0, expense: 0 };
+            if (t.type === 'INCOME') thisYearMonthlyMap[key].income += Number(t.amount);
+            else thisYearMonthlyMap[key].expense += Number(t.amount);
+        });
+
+        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const yoyComparison: Array<{
+            month: string;
+            thisYearExpense: number;
+            lastYearExpense: number;
+            change: number;
+        }> = [];
+
+        for (let i = 5; i >= 0; i--) {
+            const monthIdx = new Date(now.getFullYear(), now.getMonth() - i, 1).getMonth();
+            const thisYear = thisYearMonthlyMap[String(monthIdx)]?.expense || 0;
+            const lastYear = lastYearMonthlyMap[String(monthIdx)]?.expense || 0;
+            const change = lastYear > 0 ? Math.round(((thisYear - lastYear) / lastYear) * 100) : 0;
+            yoyComparison.push({
+                month: monthNames[monthIdx],
+                thisYearExpense: thisYear,
+                lastYearExpense: lastYear,
+                change
+            });
+        }
+
+        res.json({
+            savingsRateTrend,
+            netWorth: {
+                current: currentNetWorth,
+                bankBalance: totalBankBalance,
+                savings: totalSavings,
+                debts: totalDebts,
+                trend: netWorthTrend
+            },
+            dayOfWeek: dayOfWeekData,
+            debtProjection: {
+                avgMonthlyPayment: avgMonthlyDebtPayment,
+                debts: debtProjection
+            },
+            yoyComparison
+        });
+    } catch (error) {
+        console.error('Get advanced analytics error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

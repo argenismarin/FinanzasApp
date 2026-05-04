@@ -2,10 +2,11 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
 import { parsePagination, parseDateSafe, parseAmount } from '../lib/validation';
+import { logger } from '../lib/logger';
 
 export const getTransactions = async (req: AuthRequest, res: Response) => {
     try {
-        const { type, categoryId, accountId, startDate, endDate, page = '1', limit = '20' } = req.query;
+        const { type, categoryId, accountId, startDate, endDate, search, page = '1', limit = '20' } = req.query;
         const userId = req.user!.id;
         const userRole = req.user!.role;
 
@@ -27,6 +28,10 @@ export const getTransactions = async (req: AuthRequest, res: Response) => {
 
         if (accountId) {
             where.accountId = accountId as string;
+        }
+
+        if (search) {
+            where.description = { contains: search as string, mode: 'insensitive' };
         }
 
         if (startDate || endDate) {
@@ -285,6 +290,7 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
                 await tx.creditCardTransaction.create({
                     data: {
                         creditCardId: finalCreditCardId,
+                        transactionId: created.id,
                         amount: parsedAmount,
                         description,
                         transactionDate: parsedDate,
@@ -305,7 +311,7 @@ export const createTransaction = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(transaction);
     } catch (error) {
-        console.error('Create transaction error:', error);
+        logger.fromError('transaction_create_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -333,7 +339,16 @@ export const updateTransaction = async (req: AuthRequest, res: Response) => {
 
         // Determine final values
         const newType = type || existingTransaction.type;
-        const newAmount = amount ? parseFloat(amount) : Number(existingTransaction.amount);
+        let newAmount: number;
+        if (amount !== undefined) {
+            const parsed = parseAmount(amount);
+            if (parsed === null) {
+                return res.status(400).json({ error: 'Monto inválido. Debe ser un número positivo.' });
+            }
+            newAmount = parsed;
+        } else {
+            newAmount = Number(existingTransaction.amount);
+        }
 
         // Mutual exclusion for account/creditCard
         let finalAccountId: string | null | undefined = undefined;
@@ -363,7 +378,9 @@ export const updateTransaction = async (req: AuthRequest, res: Response) => {
         const oldAmount = Number(existingTransaction.amount);
         const oldType = existingTransaction.type;
         const oldAccountId = existingTransaction.accountId;
+        const oldCreditCardId = existingTransaction.creditCardId;
         const resolvedNewAccountId = finalAccountId !== undefined ? finalAccountId : oldAccountId;
+        const resolvedNewCreditCardId = finalCreditCardId !== undefined ? finalCreditCardId : oldCreditCardId;
 
         const transaction = await prisma.$transaction(async (tx) => {
             // Revert balance on old account
@@ -381,6 +398,17 @@ export const updateTransaction = async (req: AuthRequest, res: Response) => {
                 }
             }
 
+            // Revert balance on old credit card
+            if (oldCreditCardId) {
+                await tx.creditCard.update({
+                    where: { id: oldCreditCardId },
+                    data: {
+                        currentBalance: { decrement: oldAmount },
+                        availableCredit: { increment: oldAmount }
+                    }
+                });
+            }
+
             // Apply balance on new account
             if (resolvedNewAccountId) {
                 if (newType === 'EXPENSE') {
@@ -396,12 +424,23 @@ export const updateTransaction = async (req: AuthRequest, res: Response) => {
                 }
             }
 
+            // Apply balance on new credit card
+            if (resolvedNewCreditCardId) {
+                await tx.creditCard.update({
+                    where: { id: resolvedNewCreditCardId },
+                    data: {
+                        currentBalance: { increment: newAmount },
+                        availableCredit: { decrement: newAmount }
+                    }
+                });
+            }
+
             // Update transaction
             const updated = await tx.transaction.update({
                 where: { id },
                 data: {
                     ...(type && { type }),
-                    ...(amount && { amount: parseFloat(amount) }),
+                    ...(amount !== undefined && { amount: newAmount }),
                     ...(categoryId && { categoryId }),
                     ...(description && { description }),
                     ...(date && { date: new Date(date) }),
@@ -432,7 +471,7 @@ export const updateTransaction = async (req: AuthRequest, res: Response) => {
 
         res.json(transaction);
     } catch (error) {
-        console.error('Update transaction error:', error);
+        logger.fromError('transaction_update_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -475,7 +514,7 @@ export const deleteTransaction = async (req: AuthRequest, res: Response) => {
                 }
             }
 
-            // Revert credit card balance
+            // Revert credit card balance and clean up CreditCardTransaction
             if (transaction.creditCardId) {
                 await tx.creditCard.update({
                     where: { id: transaction.creditCardId },
@@ -483,6 +522,11 @@ export const deleteTransaction = async (req: AuthRequest, res: Response) => {
                         currentBalance: { decrement: amountNum },
                         availableCredit: { increment: amountNum }
                     }
+                });
+
+                // Delete the linked CreditCardTransaction by FK (precise, no false matches)
+                await tx.creditCardTransaction.deleteMany({
+                    where: { transactionId: transaction.id }
                 });
             }
 

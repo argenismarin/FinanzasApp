@@ -8,6 +8,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/utils';
 import Link from 'next/link';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import ExportMenu from '@/components/ExportMenu';
 
 export default function ChecklistPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
@@ -20,6 +22,8 @@ export default function ChecklistPage() {
     const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
+    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+    const [confirmMessage, setConfirmMessage] = useState('');
     const [newItem, setNewItem] = useState({
         name: '',
         amount: '',
@@ -33,11 +37,13 @@ export default function ChecklistPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data: checklistData, isLoading, refetch } = useQuery({
+    const checklistQuery = useQuery({
         queryKey: ['checklist', selectedMonth, selectedYear],
         queryFn: () => api.getChecklistItems(selectedMonth, selectedYear),
         enabled: isAuthenticated,
     });
+    const checklistData = checklistQuery.data;
+    const isLoading = checklistQuery.isLoading;
 
     const { data: categories } = useQuery({
         queryKey: ['categories'],
@@ -45,17 +51,27 @@ export default function ChecklistPage() {
         enabled: isAuthenticated,
     });
 
+    const invalidateChecklistQueries = () => {
+        queryClient.invalidateQueries({ queryKey: ['checklist'] });
+        queryClient.invalidateQueries({ queryKey: ['balance'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
+    };
+
     const toggleMutation = useMutation({
         mutationFn: (itemId: string) => api.toggleChecklistItem(itemId, selectedMonth, selectedYear),
         onSuccess: () => {
-            refetch();
+            invalidateChecklistQueries();
         },
     });
 
     const createMutation = useMutation({
         mutationFn: (data: any) => api.createChecklistItem(data),
         onSuccess: () => {
-            refetch();
+            invalidateChecklistQueries();
             setShowAddForm(false);
             setNewItem({ name: '', amount: '', dueDay: '1', categoryId: '' });
             showToast('Item guardado exitosamente', 'success');
@@ -68,7 +84,7 @@ export default function ChecklistPage() {
     const deleteMutation = useMutation({
         mutationFn: (itemId: string) => api.deleteChecklistItem(itemId, selectedMonth, selectedYear),
         onSuccess: (data: any) => {
-            refetch();
+            invalidateChecklistQueries();
             showToast(`Item eliminado desde ${data.deletedFrom}`, 'success');
         },
         onError: (error: any) => {
@@ -89,7 +105,7 @@ export default function ChecklistPage() {
     const updateMutation = useMutation({
         mutationFn: ({ id, data }: { id: string; data: any }) => api.updateChecklistItem(id, data),
         onSuccess: () => {
-            refetch();
+            invalidateChecklistQueries();
             setEditingItem(null);
             showToast('Item actualizado exitosamente', 'success');
         },
@@ -113,17 +129,9 @@ export default function ChecklistPage() {
     };
 
     const handleDeleteItem = (itemId: string, itemName: string) => {
-        if (confirm(`¿Estás seguro de eliminar "${itemName}"?`)) {
-            deleteMutation.mutate(itemId);
-        }
+        setConfirmMessage(`¿Estás seguro de eliminar "${itemName}"?`);
+        setConfirmAction(() => () => deleteMutation.mutate(itemId));
     };
-
-    // Refetch when month or year changes
-    useEffect(() => {
-        if (isAuthenticated) {
-            refetch();
-        }
-    }, [selectedMonth, selectedYear, isAuthenticated, refetch]);
 
     if (authLoading || !isAuthenticated) {
         return (
@@ -148,12 +156,15 @@ export default function ChecklistPage() {
                     <Link href="/dashboard" className="text-2xl font-bold text-gray-900 dark:text-white">
                         ← Dashboard
                     </Link>
-                    <button
-                        onClick={() => setShowAddForm(!showAddForm)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-                    >
-                        + Nuevo Item
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <ExportMenu type="checklist" />
+                        <button
+                            onClick={() => setShowAddForm(!showAddForm)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                        >
+                            + Nuevo Item
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -355,7 +366,22 @@ export default function ChecklistPage() {
 
                         {isLoading ? (
                             <div className="text-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" role="status" aria-label="Cargando checklist"></div>
+                            </div>
+                        ) : checklistQuery.isError ? (
+                            <div className="text-center py-8">
+                                <div className="inline-flex flex-col items-center gap-3 p-6 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800">
+                                    <span className="text-3xl">⚠️</span>
+                                    <p className="text-sm text-red-700 dark:text-red-300">
+                                        {(checklistQuery.error as any)?.message || 'No se pudo cargar el checklist'}
+                                    </p>
+                                    <button
+                                        onClick={() => checklistQuery.refetch()}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                                    >
+                                        Reintentar
+                                    </button>
+                                </div>
                             </div>
                         ) : items.length > 0 ? (
                             <div className="space-y-2">
@@ -422,6 +448,15 @@ export default function ChecklistPage() {
                     </div>
                 </div>
             </main>
+
+            <ConfirmModal
+                isOpen={!!confirmAction}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={() => confirmAction?.()}
+                message={confirmMessage}
+                confirmLabel="Eliminar"
+                variant="danger"
+            />
         </div>
     );
 }

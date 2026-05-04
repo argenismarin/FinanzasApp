@@ -114,12 +114,7 @@ async function main() {
                 email: 'argenis.marin@example.com',
                 name: 'Argenis David Marin Adames',
                 role: 'ADMIN',
-                isActive: true,
-                settings: JSON.stringify({
-                    currency: 'COP',
-                    locale: 'es-CO',
-                    theme: 'light'
-                })
+                isActive: true
             }
         });
         console.log('✅ Admin user created:', adminUser.email);

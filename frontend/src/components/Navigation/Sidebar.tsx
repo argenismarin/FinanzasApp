@@ -32,8 +32,10 @@ const navSections: NavSection[] = [
     title: 'Planificacion',
     items: [
       { href: '/budgets', label: 'Presupuestos', icon: '📊' },
+      { href: '/goals', label: 'Metas', icon: '🎯' },
       { href: '/savings', label: 'Ahorros', icon: '🐷' },
       { href: '/recurring', label: 'Recurrentes', icon: '🔁' },
+      { href: '/reminders', label: 'Recordatorios', icon: '🔔' },
       { href: '/checklist', label: 'Checklist', icon: '✅' },
       { href: '/categories/rules', label: 'Auto-categorizar', icon: '🤖' },
     ],
@@ -48,9 +50,11 @@ const navSections: NavSection[] = [
   {
     title: 'Analisis',
     items: [
+      { href: '/analytics', label: 'Analíticas', icon: '📊' },
       { href: '/reports', label: 'Reportes', icon: '📈' },
       { href: '/receipts', label: 'Recibos', icon: '🧾' },
       { href: '/calculators', label: 'Calculadoras', icon: '🧮' },
+      { href: '/ai', label: 'Asesor IA', icon: '🤖' },
     ],
   },
 ];

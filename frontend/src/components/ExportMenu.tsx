@@ -5,9 +5,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/components/Toast';
 import { getTodayString } from '@/lib/utils';
+import { api } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorMessages';
 
 interface ExportMenuProps {
-    type: 'transactions' | 'debts' | 'budgets' | 'monthly-report';
+    type: 'transactions' | 'debts' | 'budgets' | 'monthly-report' | 'credit-cards' | 'transfers' | 'savings' | 'recurring' | 'checklist';
     filters?: any;
 }
 
@@ -16,43 +18,59 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
     const [isExporting, setIsExporting] = useState(false);
     const { showToast } = useToast();
 
+    const buildQueryString = (): string => {
+        const queryParams = new URLSearchParams();
+        if (filters) {
+            Object.keys(filters).forEach(key => {
+                if (filters[key]) {
+                    queryParams.append(key, filters[key]);
+                }
+            });
+        }
+        const qs = queryParams.toString();
+        return qs ? '?' + qs : '';
+    };
+
     const exportToCSV = async () => {
         try {
             setIsExporting(true);
-            const token = localStorage.getItem('token');
-            
+
+            const queryString = buildQueryString();
+            const apiUrl = api.getApiUrl();
+
             let url = '';
-            const queryParams = new URLSearchParams();
-            
-            if (filters) {
-                Object.keys(filters).forEach(key => {
-                    if (filters[key]) {
-                        queryParams.append(key, filters[key]);
-                    }
-                });
-            }
-            
-            const queryString = queryParams.toString();
-            
             switch (type) {
                 case 'transactions':
-                    url = `${process.env.NEXT_PUBLIC_API_URL}/export/transactions/csv${queryString ? '?' + queryString : ''}`;
+                    url = `${apiUrl}/export/transactions/csv${queryString}`;
                     break;
                 case 'debts':
-                    url = `${process.env.NEXT_PUBLIC_API_URL}/export/debts/csv`;
+                    url = `${apiUrl}/export/debts/csv`;
                     break;
                 case 'budgets':
-                    url = `${process.env.NEXT_PUBLIC_API_URL}/export/budgets/csv`;
+                    url = `${apiUrl}/export/budgets/csv`;
+                    break;
+                case 'credit-cards':
+                    url = `${apiUrl}/export/credit-cards/csv`;
+                    break;
+                case 'transfers':
+                    url = `${apiUrl}/export/transfers/csv`;
+                    break;
+                case 'savings':
+                    url = `${apiUrl}/export/savings/csv`;
+                    break;
+                case 'recurring':
+                    url = `${apiUrl}/export/recurring/csv`;
+                    break;
+                case 'checklist':
+                    url = `${apiUrl}/export/checklist/csv`;
                     break;
             }
 
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) throw new Error('Export failed');
+            const response = await fetch(url, { headers: api.getAuthHeaders() });
+            if (!response.ok) {
+                const msg = await extractErrorMessage(response, 'No se pudo generar el CSV');
+                throw new Error(msg);
+            }
 
             const blob = await response.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
@@ -66,9 +84,9 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
 
             setIsOpen(false);
             showToast('Exportación completada', 'success');
-        } catch (error) {
-            console.error('Export error:', error);
-            showToast('Error al exportar', 'error');
+        } catch (error: any) {
+            console.error('ExportMenu.exportToCSV:', error);
+            showToast(error?.message || 'Error al exportar', 'error');
         } finally {
             setIsExporting(false);
         }
@@ -77,30 +95,15 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
     const exportToPDF = async () => {
         try {
             setIsExporting(true);
-            const token = localStorage.getItem('token');
 
-            // Fetch data for PDF
-            let url = '';
-            const queryParams = new URLSearchParams();
-            
-            if (filters) {
-                Object.keys(filters).forEach(key => {
-                    if (filters[key]) {
-                        queryParams.append(key, filters[key]);
-                    }
-                });
+            const queryString = buildQueryString();
+            const url = `${api.getApiUrl()}/export/monthly-report${queryString}`;
+
+            const response = await fetch(url, { headers: api.getAuthHeaders() });
+            if (!response.ok) {
+                const msg = await extractErrorMessage(response, 'No se pudo generar el PDF');
+                throw new Error(msg);
             }
-            
-            const queryString = queryParams.toString();
-            url = `${process.env.NEXT_PUBLIC_API_URL}/export/monthly-report${queryString ? '?' + queryString : ''}`;
-
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) throw new Error('Export failed');
 
             const data = await response.json();
 
@@ -168,9 +171,9 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
             
             setIsOpen(false);
             showToast('PDF generado exitosamente', 'success');
-        } catch (error) {
-            console.error('PDF export error:', error);
-            showToast('Error al generar PDF', 'error');
+        } catch (error: any) {
+            console.error('ExportMenu.exportToPDF:', error);
+            showToast(error?.message || 'Error al generar PDF', 'error');
         } finally {
             setIsExporting(false);
         }
@@ -193,30 +196,30 @@ export default function ExportMenu({ type, filters }: ExportMenuProps) {
                         className="fixed inset-0 z-40"
                         onClick={() => setIsOpen(false)}
                     />
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50">
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
                         <div className="p-2 space-y-1">
                             <button
                                 onClick={exportToCSV}
-                                className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded-lg transition flex items-center gap-3"
+                                className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition flex items-center gap-3"
                                 disabled={isExporting}
                             >
                                 <span className="text-2xl">📊</span>
                                 <div>
-                                    <p className="font-semibold text-gray-900">Exportar CSV</p>
-                                    <p className="text-xs text-gray-500">Excel compatible</p>
+                                    <p className="font-semibold text-gray-900 dark:text-white">Exportar CSV</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Excel compatible</p>
                                 </div>
                             </button>
-                            
+
                             {type === 'monthly-report' && (
                                 <button
                                     onClick={exportToPDF}
-                                    className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded-lg transition flex items-center gap-3"
+                                    className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition flex items-center gap-3"
                                     disabled={isExporting}
                                 >
                                     <span className="text-2xl">📄</span>
                                     <div>
-                                        <p className="font-semibold text-gray-900">Exportar PDF</p>
-                                        <p className="text-xs text-gray-500">Reporte completo</p>
+                                        <p className="font-semibold text-gray-900 dark:text-white">Exportar PDF</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Reporte completo</p>
                                     </div>
                                 </button>
                             )}

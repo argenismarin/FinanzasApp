@@ -4,36 +4,56 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { api } from '@/lib/api';
+import { useToast } from '@/components/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary';
+import { goalSchema, type GoalFormData } from '@/lib/schemas';
 import Link from 'next/link';
 
 export default function GoalsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const { showToast } = useToast();
     const [showModal, setShowModal] = useState(false);
     const [showContributeModal, setShowContributeModal] = useState(false);
+    const [editingGoal, setEditingGoal] = useState<any>(null);
     const [selectedGoal, setSelectedGoal] = useState<any>(null);
     const [contributeAmount, setContributeAmount] = useState('');
-    const [formData, setFormData] = useState({
-        name: '',
-        targetAmount: '',
-        deadline: ''
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [confirmDeleteName, setConfirmDeleteName] = useState<string>('');
+
+    // react-hook-form + Zod — validación inline con mensajes en español
+    const createForm = useForm<GoalFormData>({
+        resolver: zodResolver(goalSchema),
+        defaultValues: { name: '', targetAmount: 0, deadline: '' }
+    });
+    const editForm = useForm<GoalFormData>({
+        resolver: zodResolver(goalSchema),
+        defaultValues: { name: '', targetAmount: 0, deadline: '' }
     });
 
-    const { data: goals, isLoading } = useQuery({
+    const goalsQuery = useQuery({
         queryKey: ['goals'],
         queryFn: () => api.getGoals(),
         enabled: isAuthenticated
     });
+    const goals = goalsQuery.data;
+    const isLoading = goalsQuery.isLoading;
 
     const createMutation = useMutation({
         mutationFn: (data: any) => api.createGoal(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['goals'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
             setShowModal(false);
-            setFormData({ name: '', targetAmount: '', deadline: '' });
-        }
+            createForm.reset({ name: '', targetAmount: 0, deadline: '' });
+            showToast('Meta creada exitosamente', 'success');
+        },
+        onError: (err: any) => showToast(err?.message || 'Error al crear la meta', 'error')
     });
 
     const contributeMutation = useMutation({
@@ -41,16 +61,38 @@ export default function GoalsPage() {
             api.contributeToGoal(id, { amount }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['goals'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             setShowContributeModal(false);
             setContributeAmount('');
-        }
+            showToast('Aporte registrado exitosamente', 'success');
+        },
+        onError: () => showToast('Error al registrar el aporte', 'error')
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) => api.updateGoal(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['goals'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            setEditingGoal(null);
+            showToast('Meta actualizada', 'success');
+        },
+        onError: (err: any) => showToast(err?.message || 'Error al actualizar la meta', 'error')
     });
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.deleteGoal(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['goals'] });
-        }
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            showToast('Meta eliminada', 'success');
+        },
+        onError: () => showToast('Error al eliminar la meta', 'error')
     });
 
     if (authLoading || !isAuthenticated) {
@@ -61,9 +103,33 @@ export default function GoalsPage() {
         );
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        createMutation.mutate(formData);
+    const handleCreate = createForm.handleSubmit((data) => {
+        createMutation.mutate({
+            name: data.name,
+            targetAmount: data.targetAmount,
+            deadline: data.deadline || null
+        });
+    });
+
+    const handleEdit = editForm.handleSubmit((data) => {
+        if (!editingGoal) return;
+        updateMutation.mutate({
+            id: editingGoal.id,
+            data: {
+                name: data.name,
+                targetAmount: data.targetAmount,
+                deadline: data.deadline || null
+            }
+        });
+    });
+
+    const openEditModal = (goal: any) => {
+        editForm.reset({
+            name: goal.name,
+            targetAmount: Number(goal.targetAmount),
+            deadline: goal.deadline ? new Date(goal.deadline).toISOString().split('T')[0] : ''
+        });
+        setEditingGoal({ id: goal.id });
     };
 
     const handleContribute = (e: React.FormEvent) => {
@@ -90,13 +156,24 @@ export default function GoalsPage() {
             </header>
 
             <main className="container mx-auto px-4 py-8">
-                {isLoading ? (
-                    <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    </div>
-                ) : goals && goals.length > 0 ? (
+                <QueryStateBoundary
+                    query={goalsQuery}
+                    emptyState={
+                        <div className="text-center py-12">
+                            <p className="text-4xl mb-4">🎯</p>
+                            <p className="text-gray-600 dark:text-gray-400 mb-4">No tienes metas de ahorro</p>
+                            <button
+                                onClick={() => setShowModal(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg"
+                            >
+                                Crear Primera Meta
+                            </button>
+                        </div>
+                    }
+                >
+                    {(goalsList: any[]) => (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {goals.map((goal: any) => (
+                        {goalsList.map((goal: any) => (
                             <div key={goal.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex-1">
@@ -109,12 +186,25 @@ export default function GoalsPage() {
                                             </p>
                                         )}
                                     </div>
-                                    <button
-                                        onClick={() => deleteMutation.mutate(goal.id)}
-                                        className="text-red-600 hover:text-red-700"
-                                    >
-                                        🗑️
-                                    </button>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => openEditModal(goal)}
+                                            className="text-blue-600 hover:text-blue-700 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                            aria-label={`Editar meta ${goal.name}`}
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setConfirmDeleteId(goal.id);
+                                                setConfirmDeleteName(goal.name);
+                                            }}
+                                            className="text-red-600 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                            aria-label={`Eliminar meta ${goal.name}`}
+                                        >
+                                            🗑️
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-3 mb-4">
@@ -158,38 +248,28 @@ export default function GoalsPage() {
                             </div>
                         ))}
                     </div>
-                ) : (
-                    <div className="text-center py-12">
-                        <p className="text-4xl mb-4">🎯</p>
-                        <p className="text-gray-600 dark:text-gray-400 mb-4">No tienes metas de ahorro</p>
-                        <button
-                            onClick={() => setShowModal(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg"
-                        >
-                            Crear Primera Meta
-                        </button>
-                    </div>
-                )}
+                    )}
+                </QueryStateBoundary>
             </main>
 
-            {/* Create Modal */}
-            {showModal && (
+            {/* Edit Modal */}
+            {editingGoal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Nueva Meta de Ahorro</h2>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">✏️ Editar Meta</h2>
+                        <form onSubmit={handleEdit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Nombre de la Meta
+                                    Nombre
                                 </label>
                                 <input
                                     type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    required
+                                    {...editForm.register('name')}
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    placeholder="Ej: Vacaciones, Auto nuevo..."
                                 />
+                                {editForm.formState.errors.name && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.name.message}</p>
+                                )}
                             </div>
 
                             <div>
@@ -198,14 +278,14 @@ export default function GoalsPage() {
                                 </label>
                                 <input
                                     type="number"
-                                    value={formData.targetAmount}
-                                    onChange={(e) => setFormData({ ...formData, targetAmount: e.target.value })}
-                                    required
+                                    {...editForm.register('targetAmount')}
                                     min="0"
                                     step="10000"
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    placeholder="5000000"
                                 />
+                                {editForm.formState.errors.targetAmount && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.targetAmount.message}</p>
+                                )}
                             </div>
 
                             <div>
@@ -214,10 +294,85 @@ export default function GoalsPage() {
                                 </label>
                                 <input
                                     type="date"
-                                    value={formData.deadline}
-                                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                                    {...editForm.register('deadline')}
                                     className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                 />
+                                {editForm.formState.errors.deadline && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.deadline.message}</p>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingGoal(null)}
+                                    className="flex-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 font-semibold py-3 rounded-lg"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={updateMutation.isPending}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg disabled:opacity-50"
+                                >
+                                    {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Modal */}
+            {showModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Nueva Meta de Ahorro</h2>
+                        <form onSubmit={handleCreate} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Nombre de la Meta
+                                </label>
+                                <input
+                                    type="text"
+                                    {...createForm.register('name')}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    placeholder="Ej: Vacaciones, Auto nuevo..."
+                                />
+                                {createForm.formState.errors.name && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.name.message}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Monto Objetivo
+                                </label>
+                                <input
+                                    type="number"
+                                    {...createForm.register('targetAmount')}
+                                    min="0"
+                                    step="10000"
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    placeholder="5000000"
+                                />
+                                {createForm.formState.errors.targetAmount && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.targetAmount.message}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Fecha Límite (Opcional)
+                                </label>
+                                <input
+                                    type="date"
+                                    {...createForm.register('deadline')}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                {createForm.formState.errors.deadline && (
+                                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.deadline.message}</p>
+                                )}
                             </div>
 
                             <div className="flex gap-3 pt-4">
@@ -296,6 +451,20 @@ export default function GoalsPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                isOpen={confirmDeleteId !== null}
+                onClose={() => setConfirmDeleteId(null)}
+                onConfirm={() => {
+                    if (confirmDeleteId) deleteMutation.mutate(confirmDeleteId);
+                    setConfirmDeleteId(null);
+                }}
+                title="Eliminar meta"
+                message={`¿Seguro que quieres eliminar la meta "${confirmDeleteName}"? Esta acción no se puede deshacer.`}
+                confirmLabel="Eliminar"
+                variant="danger"
+                isPending={deleteMutation.isPending}
+            />
         </div>
     );
 }

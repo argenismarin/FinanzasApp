@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { analyzeReceipt } from '../services/openai.service';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
     user?: {
@@ -37,13 +38,13 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
         try {
             ocrData = await analyzeReceipt(base64Data);
         } catch (ocrError: any) {
-            console.error('OCR processing error:', ocrError.message);
+            logger.fromError('receipt_ocr_failed', ocrError);
 
             // Create receipt with PENDING status if OCR fails
+            // imageUrl queda null hasta que se integre almacenamiento persistente (Vercel Blob/S3)
             const receipt = await prisma.receipt.create({
                 data: {
                     userId,
-                    imageUrl: `data:image/jpeg;base64,${base64Data.substring(0, 100)}...`, // Store truncated for reference
                     status: 'PENDING'
                 }
             });
@@ -70,15 +71,15 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
         }
 
         // Create receipt with extracted data
+        // imageUrl null por ahora — la imagen se procesa en memoria sin almacenar
         const receipt = await prisma.receipt.create({
             data: {
                 userId,
-                imageUrl: 'base64-processed', // No file storage in serverless
                 ocrData: JSON.stringify(ocrData),
                 extractedAmount: ocrData.amount || null,
                 extractedDate,
                 extractedMerchant: ocrData.merchant || null,
-                confidenceScore: (ocrData.confidence || 75) / 100, // Convert to 0-1 scale
+                confidenceScore: (ocrData.confidence || 75) / 100,
                 status: 'APPROVED'
             }
         });
@@ -88,7 +89,7 @@ export const uploadReceipt = async (req: AuthRequest, res: Response) => {
             ocrData // Return parsed ocrData for immediate use
         });
     } catch (error: any) {
-        console.error('Upload receipt error:', error);
+        logger.fromError('receipt_upload_failed', error);
 
         // More descriptive error response
         let errorMessage = 'Error interno del servidor';
@@ -125,7 +126,7 @@ export const getReceipts = async (req: AuthRequest, res: Response) => {
 
         res.json(receiptsWithParsedData);
     } catch (error) {
-        console.error('Get receipts error:', error);
+        logger.fromError('receipt_get_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -149,7 +150,7 @@ export const getReceipt = async (req: AuthRequest, res: Response) => {
             ocrData: receipt.ocrData ? JSON.parse(receipt.ocrData) : null
         });
     } catch (error) {
-        console.error('Get receipt error:', error);
+        logger.fromError('receipt_get_one_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -159,7 +160,7 @@ export const createTransactionFromReceipt = async (req: AuthRequest, res: Respon
     try {
         const { id } = req.params;
         const userId = req.user!.id;
-        const { amount, description, date, categoryId } = req.body;
+        const { amount, description, date, categoryId, accountId } = req.body;
 
         // Get the receipt
         const receipt = await prisma.receipt.findFirst({
@@ -179,31 +180,54 @@ export const createTransactionFromReceipt = async (req: AuthRequest, res: Respon
             return res.status(400).json({ error: 'Amount and categoryId are required' });
         }
 
-        // Create the transaction
-        const transaction = await prisma.transaction.create({
-            data: {
-                userId,
-                type: 'EXPENSE', // Receipts are typically expenses
-                amount: parseFloat(amount),
-                categoryId,
-                description: description || receipt.extractedMerchant || 'Gasto desde recibo',
-                date: date ? new Date(date) : (receipt.extractedDate || new Date()),
-                receiptUrl: receipt.id // Link to receipt
-            },
-            include: {
-                category: true
+        // Validate bank account if provided
+        if (accountId) {
+            const account = await prisma.bankAccount.findFirst({
+                where: { id: accountId, userId }
+            });
+            if (!account) {
+                return res.status(404).json({ error: 'Bank account not found' });
             }
-        });
+        }
 
-        // Update receipt with transaction link
-        await prisma.receipt.update({
-            where: { id },
-            data: { transactionId: transaction.id }
+        const parsedAmount = parseFloat(amount);
+
+        // Create the transaction and update account atomically
+        const transaction = await prisma.$transaction(async (tx) => {
+            const created = await tx.transaction.create({
+                data: {
+                    userId,
+                    type: 'EXPENSE',
+                    amount: parsedAmount,
+                    categoryId,
+                    description: description || receipt.extractedMerchant || 'Gasto desde recibo',
+                    date: date ? new Date(date) : (receipt.extractedDate || new Date()),
+                    receiptUrl: receipt.id,
+                    accountId: accountId || null
+                },
+                include: { category: true }
+            });
+
+            // Debit bank account if provided
+            if (accountId) {
+                await tx.bankAccount.update({
+                    where: { id: accountId },
+                    data: { balance: { decrement: parsedAmount } }
+                });
+            }
+
+            // Update receipt with transaction link
+            await tx.receipt.update({
+                where: { id },
+                data: { transactionId: created.id }
+            });
+
+            return created;
         });
 
         res.status(201).json(transaction);
     } catch (error: any) {
-        console.error('Create transaction from receipt error:', error);
+        logger.fromError('receipt_create_transaction_failed', error);
         res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 };
@@ -225,7 +249,7 @@ export const deleteReceipt = async (req: AuthRequest, res: Response) => {
         await prisma.receipt.delete({ where: { id } });
         res.json({ message: 'Receipt deleted successfully' });
     } catch (error) {
-        console.error('Delete receipt error:', error);
+        logger.fromError('receipt_delete_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

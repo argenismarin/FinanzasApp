@@ -13,6 +13,9 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary';
+import ExportMenu from '@/components/ExportMenu';
 
 interface CreditCard {
     id: string;
@@ -94,11 +97,22 @@ export default function CreditCardsPage() {
     const queryClient = useQueryClient();
     const { showToast } = useToast();
 
+    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+    const [confirmMessage, setConfirmMessage] = useState('');
     const [showNewCardModal, setShowNewCardModal] = useState(false);
     const [showTransactionModal, setShowTransactionModal] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [selectedCard, setSelectedCard] = useState<CreditCard | null>(null);
     const [expandedCard, setExpandedCard] = useState<string | null>(null);
+    const [editingTransaction, setEditingTransaction] = useState<{
+        cardId: string;
+        transactionId: string;
+        amount: string;
+        description: string;
+        merchant: string;
+        installments: string;
+        transactionDate: string;
+    } | null>(null);
 
     const [newCard, setNewCard] = useState({
         name: '',
@@ -134,11 +148,12 @@ export default function CreditCardsPage() {
     }, [authLoading, isAuthenticated, router]);
 
     // Fetch credit cards
-    const { data: cards, isLoading: cardsLoading } = useQuery<CreditCard[]>({
+    const cardsQuery = useQuery<CreditCard[]>({
         queryKey: ['credit-cards'],
         queryFn: () => api.getCreditCards(),
         enabled: isAuthenticated
     });
+    const cards = cardsQuery.data;
 
     // Fetch bank accounts for payment source
     const { data: accounts } = useQuery({
@@ -160,6 +175,8 @@ export default function CreditCardsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
             setShowNewCardModal(false);
             setNewCard({
                 name: '', lastFourDigits: '', brand: 'VISA', creditLimit: '',
@@ -176,6 +193,8 @@ export default function CreditCardsPage() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
             setShowTransactionModal(false);
             setSelectedCard(null);
             setNewTransaction({
@@ -194,6 +213,11 @@ export default function CreditCardsPage() {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
             queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             setShowPaymentModal(false);
             setSelectedCard(null);
             setNewPayment({
@@ -206,12 +230,43 @@ export default function CreditCardsPage() {
         onError: () => showToast('Error al registrar el pago', 'error')
     });
 
+    // Update CC transaction mutation
+    const updateTransactionMutation = useMutation({
+        mutationFn: ({ cardId, transactionId, data }: { cardId: string; transactionId: string; data: any }) =>
+            api.updateCreditCardTransaction(cardId, transactionId, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            setEditingTransaction(null);
+            showToast('Gasto actualizado exitosamente', 'success');
+        },
+        onError: () => showToast('Error al actualizar el gasto', 'error')
+    });
+
+    // Delete CC transaction mutation
+    const deleteTransactionMutation = useMutation({
+        mutationFn: ({ cardId, transactionId }: { cardId: string; transactionId: string }) =>
+            api.deleteCreditCardTransaction(cardId, transactionId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            showToast('Gasto eliminado exitosamente', 'success');
+        },
+        onError: () => showToast('Error al eliminar el gasto', 'error')
+    });
+
     // Delete card mutation
     const deleteCardMutation = useMutation({
         mutationFn: (cardId: string) => api.deleteCreditCard(cardId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
             queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
             showToast('Tarjeta eliminada', 'success');
         },
         onError: () => showToast('Error al eliminar la tarjeta', 'error')
@@ -219,9 +274,28 @@ export default function CreditCardsPage() {
 
     const handleCreateCard = (e: React.FormEvent) => {
         e.preventDefault();
+        const limit = parseFloat(newCard.creditLimit.replace(/\./g, ''));
+        if (!newCard.name.trim()) {
+            showToast('El nombre de la tarjeta es requerido', 'error');
+            return;
+        }
+        if (isNaN(limit) || limit <= 0) {
+            showToast('El límite de crédito debe ser mayor a cero', 'error');
+            return;
+        }
+        const cutOff = parseInt(newCard.cutOffDay);
+        const dueDay = parseInt(newCard.paymentDueDay);
+        if (isNaN(cutOff) || cutOff < 1 || cutOff > 31) {
+            showToast('Día de corte debe estar entre 1 y 31', 'error');
+            return;
+        }
+        if (isNaN(dueDay) || dueDay < 1 || dueDay > 31) {
+            showToast('Día de pago debe estar entre 1 y 31', 'error');
+            return;
+        }
         createCardMutation.mutate({
             ...newCard,
-            creditLimit: parseFloat(newCard.creditLimit.replace(/\./g, '')),
+            creditLimit: limit,
             interestRate: newCard.interestRate ? parseFloat(newCard.interestRate) : null
         });
     };
@@ -229,12 +303,26 @@ export default function CreditCardsPage() {
     const handleAddTransaction = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedCard) return;
+        const amount = parseFloat(newTransaction.amount.replace(/\./g, ''));
+        if (isNaN(amount) || amount <= 0) {
+            showToast('Ingresa un monto válido (mayor a cero)', 'error');
+            return;
+        }
+        if (!newTransaction.description.trim()) {
+            showToast('La descripción es requerida', 'error');
+            return;
+        }
+        const installments = parseInt(newTransaction.installments);
+        if (isNaN(installments) || installments < 1) {
+            showToast('Las cuotas deben ser al menos 1', 'error');
+            return;
+        }
         addTransactionMutation.mutate({
             cardId: selectedCard.id,
             data: {
                 ...newTransaction,
-                amount: parseFloat(newTransaction.amount.replace(/\./g, '')),
-                installments: parseInt(newTransaction.installments)
+                amount,
+                installments
             }
         });
     };
@@ -242,9 +330,18 @@ export default function CreditCardsPage() {
     const handleAddPayment = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedCard) return;
+        const amount = parseFloat(newPayment.amount.replace(/\./g, ''));
+        if (isNaN(amount) || amount <= 0) {
+            showToast('Ingresa un monto válido (mayor a cero)', 'error');
+            return;
+        }
+        if (!newPayment.paymentDate) {
+            showToast('La fecha de pago es requerida', 'error');
+            return;
+        }
         const paymentData: any = {
             ...newPayment,
-            amount: parseFloat(newPayment.amount.replace(/\./g, ''))
+            amount
         };
         if (newPayment.fromAccountId) {
             paymentData.fromAccountId = newPayment.fromAccountId;
@@ -280,6 +377,7 @@ export default function CreditCardsPage() {
     return (
         <div className="max-w-6xl mx-auto">
             <PageHeader title="Tarjetas de Credito" emoji="💳" subtitle="Gestiona tus tarjetas y pagos">
+                <ExportMenu type="credit-cards" />
                 <Button onClick={() => setShowNewCardModal(true)}>
                     + Nueva Tarjeta
                 </Button>
@@ -330,13 +428,22 @@ export default function CreditCardsPage() {
                 )}
 
                 {/* Credit Cards List */}
-                {cardsLoading ? (
-                    <div className="flex justify-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                    </div>
-                ) : cards && cards.length > 0 ? (
+                <QueryStateBoundary
+                    query={cardsQuery}
+                    emptyState={
+                        <Card padding="lg" className="text-center">
+                            <p className="text-4xl sm:text-5xl md:text-6xl mb-4">💳</p>
+                            <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">No tienes tarjetas registradas</h3>
+                            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-6">Agrega tus tarjetas de crédito para llevar un control</p>
+                            <Button onClick={() => setShowNewCardModal(true)}>
+                                + Agregar Primera Tarjeta
+                            </Button>
+                        </Card>
+                    }
+                >
+                    {(cardsList: CreditCard[]) => (
                     <div className="space-y-4 sm:space-y-6">
-                        {cards.map((card) => (
+                        {cardsList.map((card) => (
                             <div key={card.id} className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg overflow-hidden">
                                 {/* Card Header */}
                                 <div
@@ -408,9 +515,8 @@ export default function CreditCardsPage() {
                                             </Button>
                                             <Button
                                                 onClick={() => {
-                                                    if (confirm('¿Eliminar esta tarjeta?')) {
-                                                        deleteCardMutation.mutate(card.id);
-                                                    }
+                                                    setConfirmMessage('¿Eliminar esta tarjeta?');
+                                                    setConfirmAction(() => () => deleteCardMutation.mutate(card.id));
                                                 }}
                                                 variant="ghost"
                                                 aria-label={`Eliminar tarjeta ${card.name}`}
@@ -434,7 +540,34 @@ export default function CreditCardsPage() {
                                                                     {t.installments > 1 && ` • Cuota ${t.currentInstallment}/${t.installments}`}
                                                                 </p>
                                                             </div>
-                                                            <span className="font-bold text-red-600 dark:text-red-400 text-sm sm:text-base">-{formatCOP(t.amount)}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-red-600 dark:text-red-400 text-sm sm:text-base">-{formatCOP(t.amount)}</span>
+                                                                <button
+                                                                    onClick={() => setEditingTransaction({
+                                                                        cardId: card.id,
+                                                                        transactionId: t.id,
+                                                                        amount: t.amount.toString(),
+                                                                        description: t.description,
+                                                                        merchant: t.merchant || '',
+                                                                        installments: t.installments.toString(),
+                                                                        transactionDate: t.transactionDate.split('T')[0],
+                                                                    })}
+                                                                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 p-1"
+                                                                    aria-label={`Editar gasto ${t.description}`}
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setConfirmMessage('¿Eliminar este gasto?');
+                                                                        setConfirmAction(() => () => deleteTransactionMutation.mutate({ cardId: card.id, transactionId: t.id }));
+                                                                    }}
+                                                                    className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 p-1"
+                                                                    aria-label={`Eliminar gasto ${t.description}`}
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -468,16 +601,8 @@ export default function CreditCardsPage() {
                             </div>
                         ))}
                     </div>
-                ) : (
-                    <Card padding="lg" className="text-center">
-                        <p className="text-4xl sm:text-5xl md:text-6xl mb-4">💳</p>
-                        <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">No tienes tarjetas registradas</h3>
-                        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-6">Agrega tus tarjetas de credito para llevar un control</p>
-                        <Button onClick={() => setShowNewCardModal(true)}>
-                            + Agregar Primera Tarjeta
-                        </Button>
-                    </Card>
-                )}
+                    )}
+                </QueryStateBoundary>
 
             {/* New Card Modal */}
             <Modal isOpen={showNewCardModal} onClose={() => setShowNewCardModal(false)} title="Nueva Tarjeta de Credito" size="lg">
@@ -673,6 +798,93 @@ export default function CreditCardsPage() {
                 )}
             </Modal>
 
+            {/* Edit CC Transaction Modal */}
+            <Modal
+                isOpen={!!editingTransaction}
+                onClose={() => setEditingTransaction(null)}
+                title="Editar Gasto de Tarjeta"
+            >
+                {editingTransaction && (
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            updateTransactionMutation.mutate({
+                                cardId: editingTransaction.cardId,
+                                transactionId: editingTransaction.transactionId,
+                                data: {
+                                    amount: parseFloat(editingTransaction.amount.replace(/\./g, '')),
+                                    description: editingTransaction.description,
+                                    merchant: editingTransaction.merchant || null,
+                                    installments: parseInt(editingTransaction.installments),
+                                    transactionDate: editingTransaction.transactionDate,
+                                }
+                            });
+                        }}
+                        className="space-y-4"
+                    >
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto</label>
+                            <CurrencyInput
+                                value={editingTransaction.amount}
+                                onChange={(value) => setEditingTransaction({ ...editingTransaction, amount: value })}
+                                placeholder="100.000"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripcion</label>
+                            <input
+                                type="text"
+                                value={editingTransaction.description}
+                                onChange={(e) => setEditingTransaction({ ...editingTransaction, description: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Comercio (opcional)</label>
+                            <input
+                                type="text"
+                                value={editingTransaction.merchant}
+                                onChange={(e) => setEditingTransaction({ ...editingTransaction, merchant: e.target.value })}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cuotas</label>
+                                <select
+                                    value={editingTransaction.installments}
+                                    onChange={(e) => setEditingTransaction({ ...editingTransaction, installments: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                                >
+                                    {[1, 2, 3, 6, 12, 18, 24, 36, 48].map((n) => (
+                                        <option key={n} value={n}>{n} {n === 1 ? 'cuota' : 'cuotas'}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha</label>
+                                <input
+                                    type="date"
+                                    value={editingTransaction.transactionDate}
+                                    onChange={(e) => setEditingTransaction({ ...editingTransaction, transactionDate: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <ModalFooter>
+                            <Button type="button" variant="secondary" onClick={() => setEditingTransaction(null)}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" disabled={updateTransactionMutation.isPending}>
+                                {updateTransactionMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
+                            </Button>
+                        </ModalFooter>
+                    </form>
+                )}
+            </Modal>
+
             {/* Payment Modal */}
             <Modal
                 isOpen={showPaymentModal && !!selectedCard}
@@ -748,6 +960,15 @@ export default function CreditCardsPage() {
                     </form>
                 )}
             </Modal>
+
+            <ConfirmModal
+                isOpen={!!confirmAction}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={() => confirmAction?.()}
+                message={confirmMessage}
+                confirmLabel="Eliminar"
+                variant="danger"
+            />
         </div>
     );
 }

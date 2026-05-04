@@ -86,6 +86,8 @@ export class NotificationService {
                     where: {
                         userId,
                         type: 'BUDGET_ALERT',
+                        message: { contains: budget.category.name },
+                        title: { contains: 'Superado' },
                         createdAt: { gte: monthStart }
                     }
                 });
@@ -438,6 +440,218 @@ export class NotificationService {
         );
     }
 
+    // Check debts approaching due dates
+    static async checkDebtDueDates(userId: string) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        // Get active debts with a due date
+        const debts = await prisma.debt.findMany({
+            where: {
+                userId,
+                dueDate: { not: null }
+            }
+        });
+
+        // Filter to debts that still have a remaining balance
+        const activeDebts = debts.filter(d => Number(d.paidAmount) < Number(d.totalAmount));
+
+        for (const debt of activeDebts) {
+            const dueDate = new Date(debt.dueDate!);
+            const dueDateStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+            const diffTime = dueDateStart.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            let priority: NotificationPriority | null = null;
+            let icon: string = '💰';
+            let titleText: string = '';
+            let messageText: string = '';
+
+            const remaining = Number(debt.totalAmount) - Number(debt.paidAmount);
+
+            if (diffDays < 0) {
+                // Overdue
+                priority = 'URGENT';
+                icon = '🔴';
+                titleText = `🔴 Deuda vencida: ${debt.creditor}`;
+                messageText = `Tu deuda con ${debt.creditor} venció hace ${Math.abs(diffDays)} día${Math.abs(diffDays) !== 1 ? 's' : ''}. Saldo pendiente: $${remaining.toLocaleString()}.`;
+            } else if (diffDays === 0) {
+                // Due today
+                priority = 'URGENT';
+                icon = '🔴';
+                titleText = `🔴 Deuda vence HOY: ${debt.creditor}`;
+                messageText = `Tu deuda con ${debt.creditor} vence hoy. Saldo pendiente: $${remaining.toLocaleString()}.`;
+            } else if (diffDays <= 3) {
+                // Due within 3 days
+                priority = 'HIGH';
+                icon = '💰';
+                titleText = `💰 Deuda próxima: ${debt.creditor}`;
+                messageText = `Tu deuda con ${debt.creditor} vence en ${diffDays} día${diffDays !== 1 ? 's' : ''}. Saldo pendiente: $${remaining.toLocaleString()}.`;
+            } else if (diffDays <= 7) {
+                // Due within 7 days
+                priority = 'NORMAL';
+                icon = '💰';
+                titleText = `💰 Deuda próxima: ${debt.creditor}`;
+                messageText = `Tu deuda con ${debt.creditor} vence en ${diffDays} días. Saldo pendiente: $${remaining.toLocaleString()}.`;
+            }
+
+            if (priority) {
+                // Deduplicate: check if notification already exists today for this debt
+                const existing = await prisma.notification.findFirst({
+                    where: {
+                        userId,
+                        type: 'DEBT_DUE',
+                        message: { contains: debt.creditor },
+                        createdAt: { gte: today }
+                    }
+                });
+
+                if (!existing) {
+                    await this.create(
+                        userId,
+                        'DEBT_DUE',
+                        titleText,
+                        messageText,
+                        {
+                            icon,
+                            link: '/debts',
+                            priority
+                        }
+                    );
+                }
+            }
+        }
+    }
+
+    // Check credit card payment due dates
+    static async checkCreditCardPayments(userId: string) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        // Get active credit cards with outstanding balance
+        const creditCards = await prisma.creditCard.findMany({
+            where: {
+                userId,
+                isActive: true
+            }
+        });
+
+        const cardsWithBalance = creditCards.filter(c => Number(c.currentBalance) > 0);
+
+        for (const card of cardsWithBalance) {
+            // Calculate the next payment due date based on paymentDueDay
+            let paymentDate: Date;
+            if (now.getDate() <= card.paymentDueDay) {
+                // Payment is this month
+                paymentDate = new Date(now.getFullYear(), now.getMonth(), card.paymentDueDay);
+            } else {
+                // Payment is next month
+                paymentDate = new Date(now.getFullYear(), now.getMonth() + 1, card.paymentDueDay);
+            }
+
+            const diffTime = paymentDate.getTime() - today.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            let priority: NotificationPriority | null = null;
+            const balance = Number(card.currentBalance);
+            const cardLabel = card.name + (card.lastFourDigits ? ` (*${card.lastFourDigits})` : '');
+
+            if (diffDays === 0) {
+                priority = 'URGENT';
+            } else if (diffDays <= 2) {
+                priority = 'HIGH';
+            } else if (diffDays <= 5) {
+                priority = 'NORMAL';
+            }
+
+            if (priority) {
+                // Deduplicate: check if notification already exists today for this card
+                const existing = await prisma.notification.findFirst({
+                    where: {
+                        userId,
+                        type: 'PAYMENT_REMINDER',
+                        message: { contains: card.name },
+                        createdAt: { gte: today }
+                    }
+                });
+
+                if (!existing) {
+                    let titleText: string;
+                    let messageText: string;
+
+                    if (diffDays === 0) {
+                        titleText = `💳 Pago de tarjeta HOY: ${cardLabel}`;
+                        messageText = `Hoy es el día de pago de tu tarjeta ${cardLabel}. Saldo actual: $${balance.toLocaleString()}.`;
+                    } else {
+                        titleText = `💳 Pago de tarjeta en ${diffDays} día${diffDays !== 1 ? 's' : ''}: ${cardLabel}`;
+                        messageText = `Tu tarjeta ${cardLabel} tiene pago en ${diffDays} día${diffDays !== 1 ? 's' : ''} (día ${card.paymentDueDay}). Saldo actual: $${balance.toLocaleString()}.`;
+                    }
+
+                    await this.create(
+                        userId,
+                        'PAYMENT_REMINDER',
+                        titleText,
+                        messageText,
+                        {
+                            icon: '💳',
+                            link: '/credit-cards',
+                            priority
+                        }
+                    );
+                }
+            }
+        }
+    }
+
+    // Check pending recurring transactions
+    static async checkRecurringPending(userId: string) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // End of today for comparison (nextExecution <= today means it should have run)
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+        // Get active recurring transactions that are manual (autoCreate: false) and past due
+        const pendingRecurring = await prisma.recurringTransaction.findMany({
+            where: {
+                userId,
+                isActive: true,
+                autoCreate: false,
+                nextExecution: { lt: todayEnd }
+            }
+        });
+
+        if (pendingRecurring.length === 0) return;
+
+        // Deduplicate: only one notification per day
+        const existing = await prisma.notification.findFirst({
+            where: {
+                userId,
+                type: 'SYSTEM',
+                message: { contains: 'transacciones recurrentes' },
+                createdAt: { gte: today }
+            }
+        });
+
+        if (existing) return;
+
+        const count = pendingRecurring.length;
+        const itemDescriptions = pendingRecurring.slice(0, 3).map(r => r.description || 'Sin descripción').join(', ');
+        const moreText = count > 3 ? ` y ${count - 3} más` : '';
+        const priority: NotificationPriority = count >= 3 ? 'HIGH' : 'NORMAL';
+
+        await this.create(
+            userId,
+            'SYSTEM',
+            `🔄 ${count} transacción${count !== 1 ? 'es' : ''} recurrente${count !== 1 ? 's' : ''} pendiente${count !== 1 ? 's' : ''}`,
+            `Tienes ${count} transacciones recurrentes pendientes de ejecución: ${itemDescriptions}${moreText}. Revisa y confirma.`,
+            {
+                icon: '🔄',
+                link: '/recurring',
+                priority
+            }
+        );
+    }
+
     // Run all checks
     static async runAllChecks(userId: string) {
         await Promise.all([
@@ -446,7 +660,10 @@ export class NotificationService {
             this.checkGoalsProgress(userId),
             this.checkUnusualSpending(userId),
             this.checkChecklistReminders(userId),
-            this.checkDailyExpenseReminder(userId)
+            this.checkDailyExpenseReminder(userId),
+            this.checkDebtDueDates(userId),
+            this.checkCreditCardPayments(userId),
+            this.checkRecurringPending(userId)
         ]);
     }
 }

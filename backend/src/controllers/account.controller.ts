@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // Get all bank accounts
 export const getBankAccounts = async (req: AuthRequest, res: Response) => {
@@ -34,7 +35,7 @@ export const getBankAccounts = async (req: AuthRequest, res: Response) => {
 
         res.json(accountsWithBalance);
     } catch (error) {
-        console.error('Get bank accounts error:', error);
+        logger.fromError('account_get_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -72,7 +73,7 @@ export const getBankAccount = async (req: AuthRequest, res: Response) => {
             balance: Number(account.balance)
         });
     } catch (error) {
-        console.error('Get bank account error:', error);
+        logger.fromError('account_get_one_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -104,62 +105,7 @@ export const createBankAccount = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(account);
     } catch (error) {
-        console.error('Create bank account error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-};
-
-// Transfer between accounts
-export const transferBetweenAccounts = async (req: AuthRequest, res: Response) => {
-    try {
-        const { fromAccountId, toAccountId, amount, description } = req.body;
-        const userId = req.user!.id;
-
-        if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
-            return res.status(400).json({ error: 'Invalid transfer data' });
-        }
-
-        // Get both accounts
-        const [fromAccount, toAccount] = await Promise.all([
-            prisma.bankAccount.findUnique({ where: { id: fromAccountId } }),
-            prisma.bankAccount.findUnique({ where: { id: toAccountId } })
-        ]);
-
-        if (!fromAccount || !toAccount) {
-            return res.status(404).json({ error: 'Account not found' });
-        }
-
-        if (fromAccount.userId !== userId || toAccount.userId !== userId) {
-            return res.status(403).json({ error: 'Forbidden' });
-        }
-
-        const transferAmount = parseFloat(amount);
-
-        // Check sufficient balance
-        if (Number(fromAccount.balance) < transferAmount) {
-            return res.status(400).json({ error: 'Insufficient balance' });
-        }
-
-        // Update balances
-        await Promise.all([
-            prisma.bankAccount.update({
-                where: { id: fromAccountId },
-                data: { balance: Number(fromAccount.balance) - transferAmount }
-            }),
-            prisma.bankAccount.update({
-                where: { id: toAccountId },
-                data: { balance: Number(toAccount.balance) + transferAmount }
-            })
-        ]);
-
-        res.json({
-            message: 'Transfer successful',
-            from: fromAccount.name,
-            to: toAccount.name,
-            amount: transferAmount
-        });
-    } catch (error) {
-        console.error('Transfer error:', error);
+        logger.fromError('account_create_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -197,7 +143,7 @@ export const updateBankAccount = async (req: AuthRequest, res: Response) => {
 
         res.json(updatedAccount);
     } catch (error) {
-        console.error('Update bank account error:', error);
+        logger.fromError('account_update_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -238,7 +184,7 @@ export const deleteBankAccount = async (req: AuthRequest, res: Response) => {
 
         res.status(204).send();
     } catch (error) {
-        console.error('Delete bank account error:', error);
+        logger.fromError('account_delete_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

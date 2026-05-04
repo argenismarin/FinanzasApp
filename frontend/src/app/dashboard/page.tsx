@@ -40,23 +40,29 @@ export default function DashboardPage() {
         }
     }, [isAuthenticated]);
 
-    const { data: stats, isLoading: statsLoading } = useQuery({
+    const statsQuery = useQuery({
         queryKey: ['transaction-stats'],
         queryFn: () => api.getTransactionStats(),
         enabled: isAuthenticated,
     });
+    const stats = statsQuery.data;
+    const statsLoading = statsQuery.isLoading;
 
-    const { data: balance, isLoading: balanceLoading } = useQuery({
+    const balanceQuery = useQuery({
         queryKey: ['balance'],
         queryFn: () => api.getBalance(),
         enabled: isAuthenticated,
     });
+    const balance = balanceQuery.data;
+    const balanceLoading = balanceQuery.isLoading;
 
-    const { data: recentTransactions, isLoading: transactionsLoading } = useQuery({
+    const transactionsQuery = useQuery({
         queryKey: ['recent-transactions'],
         queryFn: () => api.getTransactions({ limit: 5 }),
         enabled: isAuthenticated,
     });
+    const recentTransactions = transactionsQuery.data;
+    const transactionsLoading = transactionsQuery.isLoading;
 
     const todayStr = getTodayString();
     const { data: todayTransactions } = useQuery({
@@ -71,11 +77,22 @@ export default function DashboardPage() {
         enabled: isAuthenticated,
     });
 
-    const { data: dashboardStats, isLoading: dashboardLoading } = useQuery({
+    const dashboardStatsQuery = useQuery({
         queryKey: ['dashboard-stats'],
         queryFn: () => api.getDashboardStats(),
         enabled: isAuthenticated,
     });
+    const dashboardStats = dashboardStatsQuery.data;
+    const dashboardLoading = dashboardStatsQuery.isLoading;
+
+    // Detect any dashboard error to show banner
+    const anyDashError = statsQuery.isError || balanceQuery.isError || transactionsQuery.isError || dashboardStatsQuery.isError;
+    const refetchDash = () => {
+        statsQuery.refetch();
+        balanceQuery.refetch();
+        transactionsQuery.refetch();
+        dashboardStatsQuery.refetch();
+    };
 
     if (authLoading || !isAuthenticated) {
         return (
@@ -102,6 +119,25 @@ export default function DashboardPage() {
                 </div>
                 <NotificationCenter />
             </div>
+
+            {/* Global error banner if dashboard data fails to load */}
+            {anyDashError && (
+                <div className="mb-4 sm:mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">⚠️</span>
+                        <p className="text-sm text-red-700 dark:text-red-300">
+                            Algunos datos del dashboard no se pudieron cargar
+                        </p>
+                    </div>
+                    <button
+                        onClick={refetchDash}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition shrink-0"
+                    >
+                        Reintentar
+                    </button>
+                </div>
+            )}
+
             {/* Daily Expense Reminder Banner */}
             {todayTransactions && todayTransactions.data?.length === 0 && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">

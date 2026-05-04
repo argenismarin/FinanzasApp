@@ -56,9 +56,28 @@ cd frontend && npm install && cp .env.example .env.local
 - **Contexts** (`src/contexts/`) - AuthContext (JWT handling), ThemeContext
 - **API Client** (`src/lib/api.ts`) - Fetch-based API client class with auth headers
 
-**State Management:** React Query for server state, Zustand for local state. Zod for form validation with react-hook-form.
+**State Management:** React Query for server state, React Context for local/auth/theme state. Zod for form validation with react-hook-form. (Note: Zustand is in package.json but unused—do not introduce Zustand stores.)
 
 **Data Flow:** Pages → React Query hooks → api.ts → Backend API → Prisma → PostgreSQL
+
+**Provider Tree** (defined in `frontend/src/components/providers.tsx`):
+```
+QueryClientProvider → ThemeProvider → AuthProvider → ToastProvider → AppShell → {children}
+```
+
+**Navigation** (`frontend/src/components/AppShell.tsx`): Wraps all pages except `/login` and `/register`. Contains collapsible `Sidebar` (5 sections: Dashboard, Finanzas, Planificación, Crédito, Análisis), `MobileNav` bottom bar, dark mode toggle, and FAB button linking to `/transactions/new`.
+
+### Backend Controller Pattern
+
+Controllers are standalone exported async functions (not class methods). Consistent pattern:
+1. Destructure `req.body` / `req.query` / `req.params`
+2. Extract `userId = req.user!.id`
+3. Validate with `parseAmount` / `parseDateSafe` from `validation.ts`
+4. Check ownership (`userId` match or ADMIN role)
+5. Execute Prisma queries (use `prisma.$transaction()` for balance mutations)
+6. Return JSON
+
+**Entry point** (`backend/src/index.ts`): Sets up Express with helmet, CORS, rate-limit, JSON parser, then registers ~20 route modules under `/api/*`.
 
 ### Key Data Models
 - `User` → owns all other entities
@@ -74,7 +93,7 @@ cd frontend && npm install && cp .env.example .env.local
 
 Base URL: `/api`
 
-- `/auth/login`, `/auth/me` - Authentication
+- `/auth/login` (**unauthenticated**), `/auth/me` - Authentication
 - `/transactions` - CRUD with filters (type, category, date range) and pagination
 - `/transactions/stats` - Income/expense/balance summary
 - `/categories`, `/budgets`, `/debts`, `/goals`, `/savings` - Resource CRUD
@@ -121,6 +140,9 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 - **AI Model:** Uses `gpt-4o-mini` for OCR and AI chat/analysis features
 - **React Query defaults:** `staleTime: 60_000` (1 min), `refetchOnWindowFocus: true`
 - **UI Language:** Entire UI is in **Spanish** (es-CO locale). All user-facing strings, toast messages, labels, and navigation must be in Spanish.
+- **Decimal precision:** All monetary fields in Prisma use `Decimal(12,2)`.
+- **Balance mutations:** Any operation affecting account balances must use `prisma.$transaction()` to ensure atomicity.
+- **Bulk import:** Transaction controller supports bulk import of up to 500 rows, processed in batches of 50.
 - **No test suite:** Neither backend nor frontend has test files or test runner configuration.
 
 ## Security Notes

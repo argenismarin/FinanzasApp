@@ -280,3 +280,200 @@ export const exportBudgetsCSV = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// Export credit cards to CSV
+export const exportCreditCardsCSV = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+
+        const cards = await prisma.creditCard.findMany({
+            where: { userId },
+            include: {
+                transactions: { orderBy: { transactionDate: 'desc' } },
+                payments: { orderBy: { paymentDate: 'desc' } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const headers = ['Tarjeta', 'Últimos 4', 'Marca', 'Límite', 'Saldo Actual', 'Disponible', 'Día Corte', 'Día Pago', 'Estado'];
+        const rows = cards.map(c => [
+            c.name,
+            c.lastFourDigits || '',
+            c.brand,
+            Number(c.creditLimit).toFixed(2),
+            Number(c.currentBalance).toFixed(2),
+            Number(c.availableCredit).toFixed(2),
+            String(c.cutOffDay),
+            String(c.paymentDueDay),
+            c.isActive ? 'Activa' : 'Inactiva'
+        ]);
+
+        const csv = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=tarjetas_${new Date().toISOString().split('T')[0]}.csv`);
+        res.send('\uFEFF' + csv);
+    } catch (error) {
+        console.error('Export credit cards CSV error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Export transfers to CSV
+export const exportTransfersCSV = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+
+        // Fetch transfers and accounts separately since AccountTransfer has no FK relations to BankAccount
+        const [transfers, accounts] = await Promise.all([
+            prisma.accountTransfer.findMany({
+                where: { userId },
+                orderBy: { transferDate: 'desc' }
+            }),
+            prisma.bankAccount.findMany({
+                where: { userId },
+                select: { id: true, name: true }
+            })
+        ]);
+
+        const accountMap = new Map(accounts.map(a => [a.id, a.name]));
+
+        const headers = ['Fecha', 'Desde', 'Hacia', 'Monto', 'Descripción'];
+        const rows = transfers.map(t => [
+            new Date(t.transferDate).toLocaleDateString('es-CO'),
+            accountMap.get(t.fromAccountId) || '',
+            accountMap.get(t.toAccountId) || '',
+            Number(t.amount).toFixed(2),
+            t.description || ''
+        ]);
+
+        const csv = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=transferencias_${new Date().toISOString().split('T')[0]}.csv`);
+        res.send('\uFEFF' + csv);
+    } catch (error) {
+        console.error('Export transfers CSV error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Export savings to CSV
+export const exportSavingsCSV = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+
+        const savings = await prisma.saving.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const headers = ['Nombre', 'Propósito', 'Monto', 'Fecha Creación'];
+        const rows = savings.map(s => [
+            s.name,
+            s.purpose || '',
+            Number(s.amount).toFixed(2),
+            new Date(s.createdAt).toLocaleDateString('es-CO')
+        ]);
+
+        const csv = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=ahorros_${new Date().toISOString().split('T')[0]}.csv`);
+        res.send('\uFEFF' + csv);
+    } catch (error) {
+        console.error('Export savings CSV error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Export recurring transactions to CSV
+export const exportRecurringCSV = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+
+        const recurring = await prisma.recurringTransaction.findMany({
+            where: { userId },
+            orderBy: { nextExecution: 'asc' }
+        });
+
+        const freqLabels: Record<string, string> = {
+            DAILY: 'Diario', WEEKLY: 'Semanal', BIWEEKLY: 'Quincenal',
+            MONTHLY: 'Mensual', QUARTERLY: 'Trimestral', YEARLY: 'Anual'
+        };
+
+        const headers = ['Descripción', 'Tipo', 'Monto', 'Frecuencia', 'Próxima Ejecución', 'Auto-crear', 'Estado'];
+        const rows = recurring.map(r => [
+            r.description,
+            r.type === 'INCOME' ? 'Ingreso' : 'Gasto',
+            Number(r.amount).toFixed(2),
+            freqLabels[r.frequency] || r.frequency,
+            new Date(r.nextExecution).toLocaleDateString('es-CO'),
+            r.autoCreate ? 'Sí' : 'No',
+            r.isActive ? 'Activo' : 'Inactivo'
+        ]);
+
+        const csv = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=recurrentes_${new Date().toISOString().split('T')[0]}.csv`);
+        res.send('\uFEFF' + csv);
+    } catch (error) {
+        console.error('Export recurring CSV error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Export checklist to CSV
+export const exportChecklistCSV = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.id;
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        const items = await prisma.checklistItem.findMany({
+            where: { userId, isActive: true },
+            include: {
+                category: true,
+                completions: {
+                    where: { month: { gte: monthStart, lte: monthEnd } }
+                }
+            },
+            orderBy: { dueDay: 'asc' }
+        });
+
+        const headers = ['Nombre', 'Categoría', 'Monto', 'Día Vencimiento', 'Estado Este Mes'];
+        const rows = items.map(item => [
+            item.name,
+            item.category?.name || '',
+            Number(item.amount).toFixed(2),
+            String(item.dueDay),
+            item.completions.length > 0 ? 'Completado' : 'Pendiente'
+        ]);
+
+        const csv = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=checklist_${new Date().toISOString().split('T')[0]}.csv`);
+        res.send('\uFEFF' + csv);
+    } catch (error) {
+        console.error('Export checklist CSV error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
     user?: {
@@ -21,7 +22,7 @@ export const getSavings = async (req: AuthRequest, res: Response) => {
 
         res.json(savings);
     } catch (error) {
-        console.error('Get savings error:', error);
+        logger.fromError('saving_get_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -29,7 +30,7 @@ export const getSavings = async (req: AuthRequest, res: Response) => {
 // Create new saving
 export const createSaving = async (req: AuthRequest, res: Response) => {
     try {
-        const { name, amount, purpose } = req.body;
+        const { name, amount, purpose, accountId } = req.body;
         const userId = req.user!.id;
 
         if (!name || !amount) {
@@ -56,31 +57,54 @@ export const createSaving = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        // Create expense transaction for putting money in savings
-        await prisma.transaction.create({
-            data: {
-                userId,
-                amount: parseFloat(amount),
-                type: 'EXPENSE',
-                categoryId: savingsCategory.id,
-                description: `Ahorro en: ${name}`,
-                date: new Date(),
-                createdBy: userId
+        // Validate bank account if provided
+        if (accountId) {
+            const account = await prisma.bankAccount.findFirst({
+                where: { id: accountId, userId }
+            });
+            if (!account) {
+                return res.status(404).json({ error: 'Bank account not found' });
             }
-        });
+        }
 
-        const saving = await prisma.saving.create({
-            data: {
-                userId,
-                name,
-                amount: parseFloat(amount),
-                purpose
+        const parsedAmount = parseFloat(amount);
+
+        // Create expense transaction and saving atomically
+        const saving = await prisma.$transaction(async (tx) => {
+            await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: parsedAmount,
+                    type: 'EXPENSE',
+                    categoryId: savingsCategory.id,
+                    description: `Ahorro en: ${name}`,
+                    date: new Date(),
+                    accountId: accountId || null,
+                    createdBy: userId
+                }
+            });
+
+            // Debit bank account if provided
+            if (accountId) {
+                await tx.bankAccount.update({
+                    where: { id: accountId },
+                    data: { balance: { decrement: parsedAmount } }
+                });
             }
+
+            return tx.saving.create({
+                data: {
+                    userId,
+                    name,
+                    amount: parsedAmount,
+                    purpose
+                }
+            });
         });
 
         res.status(201).json(saving);
     } catch (error) {
-        console.error('Create saving error:', error);
+        logger.fromError('saving_create_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -111,7 +135,7 @@ export const updateSaving = async (req: AuthRequest, res: Response) => {
 
         res.json(updated);
     } catch (error) {
-        console.error('Update saving error:', error);
+        logger.fromError('saving_update_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -136,7 +160,7 @@ export const deleteSaving = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: 'Saving deleted successfully' });
     } catch (error) {
-        console.error('Delete saving error:', error);
+        logger.fromError('saving_delete_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -145,7 +169,7 @@ export const deleteSaving = async (req: AuthRequest, res: Response) => {
 export const withdrawFromSaving = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const { amount } = req.body;
+        const { amount, accountId } = req.body;
         const userId = req.user!.id;
 
         if (!amount || parseFloat(amount) <= 0) {
@@ -187,29 +211,49 @@ export const withdrawFromSaving = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        // Create income transaction for withdrawal
-        await prisma.transaction.create({
-            data: {
-                userId,
-                amount: withdrawAmount,
-                type: 'INCOME',
-                categoryId: savingsCategory.id,
-                description: `Retiro de: ${saving.name}`,
-                date: new Date(),
-                createdBy: userId
+        // Validate bank account if provided
+        if (accountId) {
+            const account = await prisma.bankAccount.findFirst({
+                where: { id: accountId, userId }
+            });
+            if (!account) {
+                return res.status(404).json({ error: 'Bank account not found' });
+            }
+        }
+
+        // Create income transaction and update saving atomically
+        const newAmount = currentAmount - withdrawAmount;
+        await prisma.$transaction(async (tx) => {
+            await tx.transaction.create({
+                data: {
+                    userId,
+                    amount: withdrawAmount,
+                    type: 'INCOME',
+                    categoryId: savingsCategory.id,
+                    description: `Retiro de: ${saving.name}`,
+                    date: new Date(),
+                    accountId: accountId || null,
+                    createdBy: userId
+                }
+            });
+
+            // Credit bank account if provided
+            if (accountId) {
+                await tx.bankAccount.update({
+                    where: { id: accountId },
+                    data: { balance: { increment: withdrawAmount } }
+                });
+            }
+
+            if (newAmount === 0) {
+                await tx.saving.delete({ where: { id } });
+            } else {
+                await tx.saving.update({
+                    where: { id },
+                    data: { amount: newAmount }
+                });
             }
         });
-
-        // Update or delete saving
-        const newAmount = currentAmount - withdrawAmount;
-        if (newAmount === 0) {
-            await prisma.saving.delete({ where: { id } });
-        } else {
-            await prisma.saving.update({
-                where: { id },
-                data: { amount: newAmount }
-            });
-        }
 
         res.json({
             message: 'Withdrawal successful',
@@ -217,7 +261,7 @@ export const withdrawFromSaving = async (req: AuthRequest, res: Response) => {
             remainingAmount: newAmount
         });
     } catch (error) {
-        console.error('Withdraw from saving error:', error);
+        logger.fromError('saving_withdraw_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

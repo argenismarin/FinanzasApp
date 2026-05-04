@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { parseAmount, parseDateSafe } from '../lib/validation';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
     user?: {
@@ -56,7 +58,7 @@ export const createTransfer = async (req: AuthRequest, res: Response) => {
         const userId = req.user?.id;
         const { fromAccountId, toAccountId, amount, description, transferDate } = req.body;
 
-        if (!fromAccountId || !toAccountId || !amount) {
+        if (!fromAccountId || !toAccountId || amount === undefined || amount === null) {
             return res.status(400).json({
                 error: 'Cuenta origen, cuenta destino y monto son requeridos'
             });
@@ -66,6 +68,12 @@ export const createTransfer = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({
                 error: 'Las cuentas origen y destino deben ser diferentes'
             });
+        }
+
+        // Validar monto (positivo, no NaN)
+        const parsedAmount = parseAmount(amount);
+        if (parsedAmount === null) {
+            return res.status(400).json({ error: 'Monto inválido. Debe ser un número positivo.' });
         }
 
         // Verificar que ambas cuentas pertenecen al usuario
@@ -81,42 +89,79 @@ export const createTransfer = async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ error: 'Una o ambas cuentas no existen' });
         }
 
-        // Verificar saldo suficiente (opcional, permitir saldo negativo)
-        // if (Number(fromAccount.balance) < amount) {
-        //     return res.status(400).json({ error: 'Saldo insuficiente' });
-        // }
+        // Get or create transfer category
+        let transferCategory = await prisma.category.findFirst({
+            where: { userId, name: 'Transferencia' }
+        });
+        if (!transferCategory) {
+            transferCategory = await prisma.category.create({
+                data: {
+                    userId: userId!,
+                    name: 'Transferencia',
+                    type: 'EXPENSE',
+                    color: '#6366f1',
+                    icon: '🔄'
+                }
+            });
+        }
+
+        const transferDateParsed = parseDateSafe(transferDate) || new Date();
+        const desc = description || `Transferencia de ${fromAccount.name} a ${toAccount.name}`;
 
         // Crear la transferencia usando transacción de base de datos
         const result = await prisma.$transaction(async (tx) => {
             // Actualizar saldo de cuenta origen (restar)
             await tx.bankAccount.update({
                 where: { id: fromAccountId },
-                data: {
-                    balance: {
-                        decrement: amount
-                    }
-                }
+                data: { balance: { decrement: parsedAmount } }
             });
 
             // Actualizar saldo de cuenta destino (sumar)
             await tx.bankAccount.update({
                 where: { id: toAccountId },
+                data: { balance: { increment: parsedAmount } }
+            });
+
+            // Crear Transaction EXPENSE en cuenta origen
+            const fromTx = await tx.transaction.create({
                 data: {
-                    balance: {
-                        increment: amount
-                    }
+                    userId: userId!,
+                    type: 'EXPENSE',
+                    amount: parsedAmount,
+                    categoryId: transferCategory!.id,
+                    description: `${desc} → ${toAccount.name}`,
+                    date: transferDateParsed,
+                    accountId: fromAccountId,
+                    createdBy: userId!
                 }
             });
 
-            // Registrar la transferencia
+            // Crear Transaction INCOME en cuenta destino
+            const toTx = await tx.transaction.create({
+                data: {
+                    userId: userId!,
+                    type: 'INCOME',
+                    amount: parsedAmount,
+                    categoryId: transferCategory!.id,
+                    description: `${desc} ← ${fromAccount.name}`,
+                    date: transferDateParsed,
+                    accountId: toAccountId,
+                    createdBy: userId!
+                }
+            });
+
+            // Registrar la transferencia con FKs a las transacciones creadas
+            // (permite reverso seguro sin matching frágil por monto/fecha)
             const transfer = await tx.accountTransfer.create({
                 data: {
                     userId: userId!,
                     fromAccountId,
                     toAccountId,
-                    amount,
-                    description: description || `Transferencia de ${fromAccount.name} a ${toAccount.name}`,
-                    transferDate: new Date(transferDate || Date.now())
+                    amount: parsedAmount,
+                    description: desc,
+                    transferDate: transferDateParsed,
+                    fromTransactionId: fromTx.id,
+                    toTransactionId: toTx.id
                 }
             });
 
@@ -138,7 +183,7 @@ export const createTransfer = async (req: AuthRequest, res: Response) => {
             toAccount: updatedToAccount
         });
     } catch (error) {
-        console.error('Error creating transfer:', error);
+        logger.fromError('transfer_create_failed', error);
         res.status(500).json({ error: 'Error al crear transferencia' });
     }
 };
@@ -162,22 +207,40 @@ export const deleteTransfer = async (req: AuthRequest, res: Response) => {
             // Devolver el monto a la cuenta origen
             await tx.bankAccount.update({
                 where: { id: transfer.fromAccountId },
-                data: {
-                    balance: {
-                        increment: transfer.amount
-                    }
-                }
+                data: { balance: { increment: transfer.amount } }
             });
 
             // Restar el monto de la cuenta destino
             await tx.bankAccount.update({
                 where: { id: transfer.toAccountId },
-                data: {
-                    balance: {
-                        decrement: transfer.amount
-                    }
-                }
+                data: { balance: { decrement: transfer.amount } }
             });
+
+            // Eliminar SOLO las dos transacciones específicas de esta transferencia
+            // (evita borrar transferencias gemelas con mismo monto/fecha)
+            const txIds = [transfer.fromTransactionId, transfer.toTransactionId]
+                .filter((tid): tid is string => !!tid);
+            if (txIds.length > 0) {
+                await tx.transaction.deleteMany({
+                    where: { id: { in: txIds }, userId }
+                });
+            } else {
+                // Fallback para transferencias antiguas sin FK (datos legacy)
+                const transferCategory = await tx.category.findFirst({
+                    where: { userId, name: 'Transferencia' }
+                });
+                if (transferCategory) {
+                    await tx.transaction.deleteMany({
+                        where: {
+                            userId,
+                            categoryId: transferCategory.id,
+                            date: transfer.transferDate,
+                            amount: transfer.amount,
+                            accountId: { in: [transfer.fromAccountId, transfer.toAccountId] }
+                        }
+                    });
+                }
+            }
 
             // Eliminar el registro de transferencia
             await tx.accountTransfer.delete({
@@ -187,7 +250,7 @@ export const deleteTransfer = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: 'Transferencia eliminada y revertida' });
     } catch (error) {
-        console.error('Error deleting transfer:', error);
+        logger.fromError('transfer_delete_failed', error);
         res.status(500).json({ error: 'Error al eliminar transferencia' });
     }
 };
@@ -203,28 +266,13 @@ export const getAccountsForTransfer = async (req: AuthRequest, res: Response) =>
             orderBy: { name: 'asc' }
         });
 
-        // Obtener cajitas de ahorro
-        const savings = await prisma.saving.findMany({
-            where: { userId },
-            orderBy: { name: 'asc' }
-        });
-
-        const accounts = [
-            ...bankAccounts.map(a => ({
-                id: a.id,
-                name: a.name,
-                type: 'bank' as const,
-                balance: Number(a.balance),
-                icon: a.type === 'checking' ? '🏦' : a.type === 'savings' ? '💰' : '💳'
-            })),
-            ...savings.map(s => ({
-                id: s.id,
-                name: s.name,
-                type: 'saving' as const,
-                balance: Number(s.amount),
-                icon: '🐷'
-            }))
-        ];
+        const accounts = bankAccounts.map(a => ({
+            id: a.id,
+            name: a.name,
+            type: 'bank' as const,
+            balance: Number(a.balance),
+            icon: a.type === 'checking' ? '🏦' : a.type === 'savings' ? '💰' : '💳'
+        }));
 
         res.json(accounts);
     } catch (error) {

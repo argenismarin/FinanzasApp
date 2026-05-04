@@ -1,3 +1,5 @@
+import { extractErrorMessage } from './errorMessages';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 class ApiClient {
@@ -31,30 +33,31 @@ class ApiClient {
         }
     }
 
-    // Helper method to get authorization headers for use in other components
-    // Use this instead of directly accessing localStorage
+    // Helper para que componentes externos no toquen localStorage directamente
     getAuthHeaders(): HeadersInit {
         return this.getHeaders();
     }
 
-    // Get the API URL for use in other components
     getApiUrl(): string {
         return API_URL;
     }
 
-    // Generic HTTP methods
+    // Helper interno: lanza Error en español si la respuesta no es ok
+    private async ensureOk(response: Response, fallback: string): Promise<void> {
+        if (!response.ok) {
+            const message = await extractErrorMessage(response, fallback);
+            const error: any = new Error(message);
+            error.status = response.status;
+            throw error;
+        }
+    }
+
+    // Métodos HTTP genéricos
     async get(endpoint: string) {
         const response = await fetch(`${API_URL}${endpoint}`, {
             headers: this.getHeaders(),
         });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const error: any = new Error(errorData.error || `Request failed: ${response.status}`);
-            error.response = { data: errorData, status: response.status };
-            throw error;
-        }
-
+        await this.ensureOk(response, 'No se pudo obtener la información');
         const data = await response.json();
         return { data };
     }
@@ -65,14 +68,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(body),
         });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const error: any = new Error(errorData.error || `Request failed: ${response.status}`);
-            error.response = { data: errorData, status: response.status };
-            throw error;
-        }
-
+        await this.ensureOk(response, 'No se pudo completar la operación');
         const data = await response.json();
         return { data };
     }
@@ -86,20 +82,8 @@ class ApiClient {
         });
 
         if (!response.ok) {
-            let errorMessage = `Error de autenticación (${response.status})`;
-            try {
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const errorData = await response.json();
-                    errorMessage = errorData.error || errorData.message || errorMessage;
-                } else {
-                    const textError = await response.text();
-                    errorMessage = textError || errorMessage;
-                }
-            } catch (parseError) {
-                // Use default message
-            }
-            throw new Error(errorMessage);
+            const message = await extractErrorMessage(response, 'No se pudo iniciar sesión');
+            throw new Error(message);
         }
 
         const data = await response.json();
@@ -119,21 +103,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/auth/me`, {
             headers: this.getHeaders(),
         });
-
-        if (!response.ok) {
-            let errorMessage = 'No se pudo obtener información del usuario';
-            try {
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const errorData = await response.json();
-                    errorMessage = errorData.error || errorData.message || errorMessage;
-                }
-            } catch (parseError) {
-                // Ignore parse errors, use default message
-            }
-            throw new Error(errorMessage);
-        }
-
+        await this.ensureOk(response, 'No se pudo obtener tu información de usuario');
         return response.json();
     }
 
@@ -144,6 +114,7 @@ class ApiClient {
         accountId?: string;
         startDate?: string;
         endDate?: string;
+        search?: string;
         page?: number;
         limit?: number;
     }) {
@@ -158,15 +129,9 @@ class ApiClient {
 
         const response = await fetch(
             `${API_URL}/transactions?${queryParams.toString()}`,
-            {
-                headers: this.getHeaders(),
-            }
+            { headers: this.getHeaders() }
         );
-
-        if (!response.ok) {
-            throw new Error('Failed to get transactions');
-        }
-
+        await this.ensureOk(response, 'No se pudieron cargar las transacciones');
         return response.json();
     }
 
@@ -182,15 +147,9 @@ class ApiClient {
 
         const response = await fetch(
             `${API_URL}/transactions/stats?${queryParams.toString()}`,
-            {
-                headers: this.getHeaders(),
-            }
+            { headers: this.getHeaders() }
         );
-
-        if (!response.ok) {
-            throw new Error('Failed to get transaction stats');
-        }
-
+        await this.ensureOk(response, 'No se pudieron cargar las estadísticas');
         return response.json();
     }
 
@@ -198,11 +157,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/credit-cards`, {
             headers: this.getHeaders(),
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to get credit cards');
-        }
-
+        await this.ensureOk(response, 'No se pudieron cargar las tarjetas de crédito');
         return response.json();
     }
 
@@ -223,11 +178,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to create transaction');
-        }
-
+        await this.ensureOk(response, 'No se pudo crear la transacción');
         return response.json();
     }
 
@@ -237,11 +188,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to update transaction');
-        }
-
+        await this.ensureOk(response, 'No se pudo actualizar la transacción');
         return response.json();
     }
 
@@ -250,10 +197,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to delete transaction');
-        }
+        await this.ensureOk(response, 'No se pudo eliminar la transacción');
     }
 
     // Categories
@@ -262,11 +206,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/categories${queryParams}`, {
             headers: this.getHeaders(),
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to get categories');
-        }
-
+        await this.ensureOk(response, 'No se pudieron cargar las categorías');
         return response.json();
     }
 
@@ -281,11 +221,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to create category');
-        }
-
+        await this.ensureOk(response, 'No se pudo crear la categoría');
         return response.json();
     }
 
@@ -294,7 +230,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/categorization-rules`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get rules');
+        await this.ensureOk(response, 'No se pudieron cargar las reglas');
         return response.json();
     }
 
@@ -304,7 +240,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create rule');
+        await this.ensureOk(response, 'No se pudo crear la regla');
         return response.json();
     }
 
@@ -314,7 +250,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to update rule');
+        await this.ensureOk(response, 'No se pudo actualizar la regla');
         return response.json();
     }
 
@@ -323,7 +259,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete rule');
+        await this.ensureOk(response, 'No se pudo eliminar la regla');
     }
 
     async suggestCategory(description: string, type?: string) {
@@ -332,7 +268,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify({ description, ...(type && { type }) }),
         });
-        if (!response.ok) throw new Error('Failed to suggest category');
+        await this.ensureOk(response, 'No se pudo sugerir categoría');
         return response.json();
     }
 
@@ -343,7 +279,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify({ transactions }),
         });
-        if (!response.ok) throw new Error('Failed to bulk create transactions');
+        await this.ensureOk(response, 'No se pudieron importar las transacciones');
         return response.json();
     }
 
@@ -352,7 +288,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/debts`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get debts');
+        await this.ensureOk(response, 'No se pudieron cargar las deudas');
         return response.json();
     }
 
@@ -361,7 +297,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/analytics/forecast`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get forecast');
+        await this.ensureOk(response, 'No se pudo obtener el pronóstico');
         return response.json();
     }
 
@@ -370,7 +306,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/accounts`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get accounts');
+        await this.ensureOk(response, 'No se pudieron cargar las cuentas');
         return response.json();
     }
 
@@ -380,7 +316,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create account');
+        await this.ensureOk(response, 'No se pudo crear la cuenta');
         return response.json();
     }
 
@@ -390,7 +326,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to update account');
+        await this.ensureOk(response, 'No se pudo actualizar la cuenta');
         return response.json();
     }
 
@@ -399,7 +335,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete account');
+        await this.ensureOk(response, 'No se pudo eliminar la cuenta');
     }
 
     // Balance
@@ -407,7 +343,17 @@ class ApiClient {
         const response = await fetch(`${API_URL}/balance`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get balance');
+        await this.ensureOk(response, 'No se pudo obtener el balance');
+        return response.json();
+    }
+
+    async recalculateBalances(userId?: string) {
+        const query = userId ? `?userId=${userId}` : '';
+        const response = await fetch(`${API_URL}/balance/recalculate${query}`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+        });
+        await this.ensureOk(response, 'No se pudieron recalcular los saldos');
         return response.json();
     }
 
@@ -416,7 +362,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/budgets`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get budgets');
+        await this.ensureOk(response, 'No se pudieron cargar los presupuestos');
         return response.json();
     }
 
@@ -424,7 +370,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/budgets/progress`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get budget progress');
+        await this.ensureOk(response, 'No se pudo obtener el progreso del presupuesto');
         return response.json();
     }
 
@@ -434,7 +380,17 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create budget');
+        await this.ensureOk(response, 'No se pudo crear el presupuesto');
+        return response.json();
+    }
+
+    async updateBudget(id: string, data: any) {
+        const response = await fetch(`${API_URL}/budgets/${id}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        await this.ensureOk(response, 'No se pudo actualizar el presupuesto');
         return response.json();
     }
 
@@ -443,7 +399,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete budget');
+        await this.ensureOk(response, 'No se pudo eliminar el presupuesto');
     }
 
     // Checklist
@@ -455,7 +411,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/checklist${query}`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get checklist items');
+        await this.ensureOk(response, 'No se pudo cargar el checklist');
         return response.json();
     }
 
@@ -465,7 +421,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create checklist item');
+        await this.ensureOk(response, 'No se pudo crear el item');
         return response.json();
     }
 
@@ -475,7 +431,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to update checklist item');
+        await this.ensureOk(response, 'No se pudo actualizar el item');
         return response.json();
     }
 
@@ -485,7 +441,7 @@ class ApiClient {
             method: 'PATCH',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to toggle checklist item');
+        await this.ensureOk(response, 'No se pudo marcar el item');
         return response.json();
     }
 
@@ -498,15 +454,15 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete checklist item');
+        await this.ensureOk(response, 'No se pudo eliminar el item');
     }
 
-    // Credit Cards (getCreditCards already exists above)
+    // Credit Cards
     async getCreditCardsSummary() {
         const response = await fetch(`${API_URL}/credit-cards/summary`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get credit cards summary');
+        await this.ensureOk(response, 'No se pudo obtener el resumen de tarjetas');
         return response.json();
     }
 
@@ -516,7 +472,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create credit card');
+        await this.ensureOk(response, 'No se pudo crear la tarjeta');
         return response.json();
     }
 
@@ -525,7 +481,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete credit card');
+        await this.ensureOk(response, 'No se pudo eliminar la tarjeta');
     }
 
     async addCreditCardTransaction(cardId: string, data: any) {
@@ -534,8 +490,26 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to add credit card transaction');
+        await this.ensureOk(response, 'No se pudo agregar la transacción');
         return response.json();
+    }
+
+    async updateCreditCardTransaction(cardId: string, transactionId: string, data: any) {
+        const response = await fetch(`${API_URL}/credit-cards/${cardId}/transactions/${transactionId}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        await this.ensureOk(response, 'No se pudo actualizar la transacción');
+        return response.json();
+    }
+
+    async deleteCreditCardTransaction(cardId: string, transactionId: string) {
+        const response = await fetch(`${API_URL}/credit-cards/${cardId}/transactions/${transactionId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+        });
+        await this.ensureOk(response, 'No se pudo eliminar la transacción');
     }
 
     async addCreditCardPayment(cardId: string, data: any) {
@@ -544,18 +518,18 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to add credit card payment');
+        await this.ensureOk(response, 'No se pudo registrar el pago');
         return response.json();
     }
 
-    // Debts (getDebts already exists above)
+    // Debts
     async createDebt(data: any) {
         const response = await fetch(`${API_URL}/debts`, {
             method: 'POST',
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create debt');
+        await this.ensureOk(response, 'No se pudo crear la deuda');
         return response.json();
     }
 
@@ -565,7 +539,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to update debt');
+        await this.ensureOk(response, 'No se pudo actualizar la deuda');
         return response.json();
     }
 
@@ -575,7 +549,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to pay debt');
+        await this.ensureOk(response, 'No se pudo registrar el pago de la deuda');
         return response.json();
     }
 
@@ -584,7 +558,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete debt');
+        await this.ensureOk(response, 'No se pudo eliminar la deuda');
     }
 
     // Goals
@@ -592,7 +566,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/goals`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get goals');
+        await this.ensureOk(response, 'No se pudieron cargar las metas');
         return response.json();
     }
 
@@ -602,7 +576,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create goal');
+        await this.ensureOk(response, 'No se pudo crear la meta');
         return response.json();
     }
 
@@ -612,7 +586,17 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to contribute to goal');
+        await this.ensureOk(response, 'No se pudo registrar el aporte');
+        return response.json();
+    }
+
+    async updateGoal(id: string, data: any) {
+        const response = await fetch(`${API_URL}/goals/${id}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        await this.ensureOk(response, 'No se pudo actualizar la meta');
         return response.json();
     }
 
@@ -621,7 +605,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete goal');
+        await this.ensureOk(response, 'No se pudo eliminar la meta');
     }
 
     // Savings
@@ -629,7 +613,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/savings`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get savings');
+        await this.ensureOk(response, 'No se pudieron cargar los ahorros');
         return response.json();
     }
 
@@ -639,7 +623,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create saving');
+        await this.ensureOk(response, 'No se pudo crear el ahorro');
         return response.json();
     }
 
@@ -649,7 +633,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to update saving');
+        await this.ensureOk(response, 'No se pudo actualizar el ahorro');
         return response.json();
     }
 
@@ -658,7 +642,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete saving');
+        await this.ensureOk(response, 'No se pudo eliminar el ahorro');
     }
 
     async withdrawFromSaving(id: string, data: any) {
@@ -667,7 +651,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to withdraw from saving');
+        await this.ensureOk(response, 'No se pudo realizar el retiro');
         return response.json();
     }
 
@@ -676,7 +660,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/reminders`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get reminders');
+        await this.ensureOk(response, 'No se pudieron cargar los recordatorios');
         return response.json();
     }
 
@@ -686,7 +670,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create reminder');
+        await this.ensureOk(response, 'No se pudo crear el recordatorio');
         return response.json();
     }
 
@@ -695,7 +679,17 @@ class ApiClient {
             method: 'POST',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to mark reminder as paid');
+        await this.ensureOk(response, 'No se pudo marcar como pagado');
+        return response.json();
+    }
+
+    async updateReminder(id: string, data: any) {
+        const response = await fetch(`${API_URL}/reminders/${id}`, {
+            method: 'PUT',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data),
+        });
+        await this.ensureOk(response, 'No se pudo actualizar el recordatorio');
         return response.json();
     }
 
@@ -704,7 +698,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete reminder');
+        await this.ensureOk(response, 'No se pudo eliminar el recordatorio');
     }
 
     // Recurring Transactions
@@ -712,7 +706,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/recurring`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get recurring transactions');
+        await this.ensureOk(response, 'No se pudieron cargar las transacciones recurrentes');
         return response.json();
     }
 
@@ -722,7 +716,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create recurring transaction');
+        await this.ensureOk(response, 'No se pudo crear la transacción recurrente');
         return response.json();
     }
 
@@ -732,7 +726,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to update recurring transaction');
+        await this.ensureOk(response, 'No se pudo actualizar la transacción recurrente');
         return response.json();
     }
 
@@ -741,7 +735,7 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete recurring transaction');
+        await this.ensureOk(response, 'No se pudo eliminar la transacción recurrente');
     }
 
     async executeRecurringTransaction(id: string) {
@@ -749,7 +743,7 @@ class ApiClient {
             method: 'POST',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to execute recurring transaction');
+        await this.ensureOk(response, 'No se pudo ejecutar la transacción recurrente');
         return response.json();
     }
 
@@ -757,7 +751,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/recurring/pending`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get pending recurring');
+        await this.ensureOk(response, 'No se pudieron cargar las pendientes');
         return response.json();
     }
 
@@ -766,7 +760,7 @@ class ApiClient {
             method: 'POST',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to execute all pending');
+        await this.ensureOk(response, 'No se pudieron ejecutar las pendientes');
         return response.json();
     }
 
@@ -775,7 +769,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/transfers/accounts`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get accounts for transfer');
+        await this.ensureOk(response, 'No se pudieron cargar las cuentas para transferir');
         return response.json();
     }
 
@@ -783,7 +777,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/transfers`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get transfers');
+        await this.ensureOk(response, 'No se pudieron cargar las transferencias');
         return response.json();
     }
 
@@ -793,7 +787,7 @@ class ApiClient {
             headers: this.getHeaders(),
             body: JSON.stringify(data),
         });
-        if (!response.ok) throw new Error('Failed to create transfer');
+        await this.ensureOk(response, 'No se pudo crear la transferencia');
         return response.json();
     }
 
@@ -802,15 +796,15 @@ class ApiClient {
             method: 'DELETE',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to delete transfer');
+        await this.ensureOk(response, 'No se pudo eliminar la transferencia');
     }
 
-    // Analytics (getForecast already exists above)
+    // Analytics
     async getDashboardStats() {
         const response = await fetch(`${API_URL}/analytics/dashboard`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get dashboard stats');
+        await this.ensureOk(response, 'No se pudo cargar el dashboard');
         return response.json();
     }
 
@@ -819,7 +813,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/analytics/report${query}`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get financial report');
+        await this.ensureOk(response, 'No se pudo obtener el reporte financiero');
         return response.json();
     }
 
@@ -827,7 +821,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/analytics/overview`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get analytics overview');
+        await this.ensureOk(response, 'No se pudo obtener el resumen de análisis');
         return response.json();
     }
 
@@ -836,7 +830,7 @@ class ApiClient {
         const response = await fetch(`${API_URL}/analytics/categories${query}`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get category breakdown');
+        await this.ensureOk(response, 'No se pudo obtener el desglose por categoría');
         return response.json();
     }
 
@@ -848,7 +842,44 @@ class ApiClient {
         const response = await fetch(`${API_URL}/analytics/top-categories${query}`, {
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to get top categories');
+        await this.ensureOk(response, 'No se pudieron cargar las categorías principales');
+        return response.json();
+    }
+
+    async getAdvancedAnalytics() {
+        const response = await fetch(`${API_URL}/analytics/advanced`, {
+            headers: this.getHeaders(),
+        });
+        await this.ensureOk(response, 'No se pudieron cargar las métricas avanzadas');
+        return response.json();
+    }
+
+    // AI
+    async askFinancialAdvice(question: string, includeContext: boolean = true) {
+        const response = await fetch(`${API_URL}/ai/advice`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ question, includeContext }),
+        });
+        await this.ensureOk(response, 'No se pudo obtener consejo financiero');
+        return response.json();
+    }
+
+    async analyzeSpending(months: number = 1) {
+        const response = await fetch(`${API_URL}/ai/analyze-spending?months=${months}`, {
+            headers: this.getHeaders(),
+        });
+        await this.ensureOk(response, 'No se pudo analizar el gasto');
+        return response.json();
+    }
+
+    async suggestBudget(monthlyIncome: number) {
+        const response = await fetch(`${API_URL}/ai/suggest-budget`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ monthlyIncome }),
+        });
+        await this.ensureOk(response, 'No se pudo sugerir presupuesto');
         return response.json();
     }
 
@@ -858,7 +889,7 @@ class ApiClient {
             method: 'POST',
             headers: this.getHeaders(),
         });
-        if (!response.ok) throw new Error('Failed to run notification checks');
+        await this.ensureOk(response, 'No se pudieron ejecutar las verificaciones');
         return response.json();
     }
 }

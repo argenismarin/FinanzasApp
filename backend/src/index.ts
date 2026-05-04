@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import { authenticate, requireRole } from './middleware/auth';
+import { logger } from './lib/logger';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -26,18 +28,36 @@ import creditCardRoutes from './routes/credit-cards.routes';
 import recurringRoutes from './routes/recurring.routes';
 import transferRoutes from './routes/transfer.routes';
 import categorizationRuleRoutes from './routes/categorization-rule.routes';
+import cronRoutes from './routes/cron.routes';
 
 // Load environment variables
 dotenv.config();
+
+// Fail fast if critical secrets are missing — prevents silent runtime failures
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL: JWT_SECRET no está definido. El servidor no puede iniciar de forma segura.');
+    process.exit(1);
+}
 
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
-// CORS configuration - allow all origins for now to debug production issues
+
+// CORS allowlist — supports comma-separated FRONTEND_URL for staging+prod
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
 app.use(cors({
-    origin: true, // Allow all origins temporarily
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -61,14 +81,20 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Health check endpoints
-app.get('/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-app.get('/api/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// Health check endpoints — usable por uptime monitors / probes
+const startedAt = new Date();
+const healthHandler = (req: Request, res: Response) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        startedAt: startedAt.toISOString(),
+        uptimeSec: Math.floor((Date.now() - startedAt.getTime()) / 1000),
+        nodeEnv: process.env.NODE_ENV || 'development',
+        version: '2.0.0-20260130'
+    });
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Version endpoint for deployment verification
 app.get('/api/version', (req: Request, res: Response) => {
@@ -79,11 +105,10 @@ app.get('/api/version', (req: Request, res: Response) => {
     });
 });
 
-// Database connection diagnostic endpoint
-app.get('/api/db-check', async (req: Request, res: Response) => {
+// Database connection diagnostic — admin only (exposes DB error details)
+app.get('/api/db-check', authenticate, requireRole(['ADMIN']), async (req: Request, res: Response) => {
     try {
         const prisma = (await import('./lib/prisma')).default;
-        // Try a simple query
         const result = await prisma.$queryRaw`SELECT 1 as test`;
         res.json({
             status: 'connected',
@@ -101,8 +126,8 @@ app.get('/api/db-check', async (req: Request, res: Response) => {
     }
 });
 
-// OpenAI configuration check endpoint
-app.get('/api/openai-check', async (req: Request, res: Response) => {
+// OpenAI configuration check — admin only (exposes API key fingerprint)
+app.get('/api/openai-check', authenticate, requireRole(['ADMIN']), async (req: Request, res: Response) => {
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
@@ -113,16 +138,12 @@ app.get('/api/openai-check', async (req: Request, res: Response) => {
         });
     }
 
-    // Check if key format looks valid (starts with sk-)
     const isValidFormat = apiKey.startsWith('sk-');
     const keyPreview = apiKey.substring(0, 10) + '...' + apiKey.substring(apiKey.length - 4);
 
-    // Test the API key with a simple request
     try {
         const OpenAI = (await import('openai')).default;
         const openai = new OpenAI({ apiKey });
-
-        // Simple test - list models (very cheap operation)
         await openai.models.list();
 
         res.json({
@@ -191,17 +212,23 @@ app.use('/api/credit-cards', creditCardRoutes);
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/categorization-rules', categorizationRuleRoutes);
+app.use('/api/cron', cronRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
-    res.status(404).json({ error: 'Not found' });
+    res.status(404).json({ error: 'Recurso no encontrado' });
 });
 
-// Error handler
+// Error handler global — log estructurado, mensaje sanitizado en prod
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error(err.stack);
+    logger.fromError('unhandled_request_error', err, {
+        method: req.method,
+        path: req.path,
+        ip: req.ip
+    });
     res.status(500).json({
-        error: 'Internal server error',
+        error: 'Error interno del servidor',
+        // Solo exponemos el mensaje original en desarrollo
         message: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
 });

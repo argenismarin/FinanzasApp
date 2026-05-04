@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { parseAmount, parseDateSafe } from '../lib/validation';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
     user?: {
@@ -7,6 +9,20 @@ interface AuthRequest extends Request {
         email: string;
         role: string;
     };
+}
+
+// Calcula la siguiente ejecución según la frecuencia (mutuamente reusable)
+function advanceDate(from: Date, frequency: string): Date {
+    const next = new Date(from);
+    switch (frequency) {
+        case 'DAILY':     next.setDate(next.getDate() + 1); break;
+        case 'WEEKLY':    next.setDate(next.getDate() + 7); break;
+        case 'BIWEEKLY':  next.setDate(next.getDate() + 14); break;
+        case 'MONTHLY':   next.setMonth(next.getMonth() + 1); break;
+        case 'QUARTERLY': next.setMonth(next.getMonth() + 3); break;
+        case 'YEARLY':    next.setFullYear(next.getFullYear() + 1); break;
+    }
+    return next;
 }
 
 // Obtener todas las transacciones recurrentes del usuario
@@ -24,7 +40,7 @@ export const getRecurringTransactions = async (req: AuthRequest, res: Response) 
             amount: Number(r.amount)
         })));
     } catch (error) {
-        console.error('Error fetching recurring transactions:', error);
+        logger.fromError('recurring_get_failed', error);
         res.status(500).json({ error: 'Error al obtener transacciones recurrentes' });
     }
 };
@@ -43,17 +59,23 @@ export const createRecurringTransaction = async (req: AuthRequest, res: Response
             dayOfWeek,
             startDate,
             endDate,
-            autoCreate
+            autoCreate,
+            accountId
         } = req.body;
 
-        if (!type || !amount || !categoryId || !description || !frequency) {
+        if (!type || amount === undefined || amount === null || !categoryId || !description || !frequency) {
             return res.status(400).json({
                 error: 'Tipo, monto, categoría, descripción y frecuencia son requeridos'
             });
         }
 
+        const parsedAmount = parseAmount(amount);
+        if (parsedAmount === null) {
+            return res.status(400).json({ error: 'Monto inválido. Debe ser un número positivo.' });
+        }
+
         // Calcular próxima ejecución
-        const start = new Date(startDate || Date.now());
+        const start = parseDateSafe(startDate) || new Date();
         let nextExecution = new Date(start);
 
         // Ajustar según la frecuencia
@@ -69,11 +91,10 @@ export const createRecurringTransaction = async (req: AuthRequest, res: Response
                 }
                 break;
             case 'BIWEEKLY':
-                if (dayOfMonth) {
-                    nextExecution.setDate(dayOfMonth);
-                    if (nextExecution < start) {
-                        nextExecution.setDate(nextExecution.getDate() + 14);
-                    }
+                if (dayOfWeek !== undefined) {
+                    const currentDay = start.getDay();
+                    const daysToAdd = (dayOfWeek - currentDay + 7) % 7;
+                    nextExecution.setDate(nextExecution.getDate() + daysToAdd);
                 }
                 break;
             case 'MONTHLY':
@@ -88,20 +109,30 @@ export const createRecurringTransaction = async (req: AuthRequest, res: Response
                 break;
         }
 
+        const endDateParsed = parseDateSafe(endDate);
+
+        // Si la primera ejecución ya excede endDate, rechazar (no tiene sentido crearla)
+        if (endDateParsed && nextExecution > endDateParsed) {
+            return res.status(400).json({
+                error: 'La fecha de fin es anterior a la primera ejecución calculada'
+            });
+        }
+
         const recurring = await prisma.recurringTransaction.create({
             data: {
                 userId: userId!,
                 type,
-                amount,
+                amount: parsedAmount,
                 categoryId,
                 description,
                 frequency,
                 dayOfMonth: dayOfMonth || null,
                 dayOfWeek: dayOfWeek !== undefined ? dayOfWeek : null,
                 startDate: start,
-                endDate: endDate ? new Date(endDate) : null,
+                endDate: endDateParsed,
                 nextExecution,
                 autoCreate: autoCreate || false,
+                accountId: accountId || null,
                 isActive: true
             }
         });
@@ -111,7 +142,7 @@ export const createRecurringTransaction = async (req: AuthRequest, res: Response
             amount: Number(recurring.amount)
         });
     } catch (error) {
-        console.error('Error creating recurring transaction:', error);
+        logger.fromError('recurring_create_failed', error);
         res.status(500).json({ error: 'Error al crear transacción recurrente' });
     }
 };
@@ -142,7 +173,8 @@ export const updateRecurringTransaction = async (req: AuthRequest, res: Response
                 dayOfMonth: updateData.dayOfMonth,
                 dayOfWeek: updateData.dayOfWeek,
                 endDate: updateData.endDate ? new Date(updateData.endDate) : null,
-                autoCreate: updateData.autoCreate
+                autoCreate: updateData.autoCreate,
+                ...(updateData.accountId !== undefined && { accountId: updateData.accountId || null })
             }
         });
 
@@ -151,7 +183,7 @@ export const updateRecurringTransaction = async (req: AuthRequest, res: Response
             amount: Number(recurring.amount)
         });
     } catch (error) {
-        console.error('Error updating recurring transaction:', error);
+        logger.fromError('recurring_update_failed', error);
         res.status(500).json({ error: 'Error al actualizar transacción recurrente' });
     }
 };
@@ -177,7 +209,7 @@ export const deleteRecurringTransaction = async (req: AuthRequest, res: Response
 
         res.json({ message: 'Transacción recurrente eliminada' });
     } catch (error) {
-        console.error('Error deleting recurring transaction:', error);
+        logger.fromError('recurring_delete_failed', error);
         res.status(500).json({ error: 'Error al eliminar transacción recurrente' });
     }
 };
@@ -196,59 +228,67 @@ export const executeRecurringTransaction = async (req: AuthRequest, res: Respons
             return res.status(404).json({ error: 'Transacción recurrente no encontrada' });
         }
 
-        // Crear la transacción
-        const transaction = await prisma.transaction.create({
-            data: {
-                userId: userId!,
-                type: recurring.type,
-                amount: recurring.amount,
-                categoryId: recurring.categoryId,
-                description: `${recurring.description} (Recurrente)`,
-                date: new Date(),
-                isRecurring: true,
-                recurringPattern: JSON.stringify({
-                    recurringId: recurring.id,
-                    frequency: recurring.frequency
-                })
-            }
-        });
-
-        // Calcular próxima ejecución
-        let nextExecution = new Date(recurring.nextExecution);
-        switch (recurring.frequency) {
-            case 'DAILY':
-                nextExecution.setDate(nextExecution.getDate() + 1);
-                break;
-            case 'WEEKLY':
-                nextExecution.setDate(nextExecution.getDate() + 7);
-                break;
-            case 'BIWEEKLY':
-                nextExecution.setDate(nextExecution.getDate() + 14);
-                break;
-            case 'MONTHLY':
-                nextExecution.setMonth(nextExecution.getMonth() + 1);
-                break;
-            case 'QUARTERLY':
-                nextExecution.setMonth(nextExecution.getMonth() + 3);
-                break;
-            case 'YEARLY':
-                nextExecution.setFullYear(nextExecution.getFullYear() + 1);
-                break;
+        // Bloquear si la fecha actual ya pasó endDate (no tiene sentido crear)
+        const now = new Date();
+        if (recurring.endDate && recurring.nextExecution > recurring.endDate) {
+            // Marcar inactiva sin crear nada
+            await prisma.recurringTransaction.update({
+                where: { id },
+                data: { isActive: false }
+            });
+            return res.status(400).json({
+                error: 'La transacción recurrente ya pasó su fecha de finalización'
+            });
         }
 
-        // Verificar si debe desactivarse
-        let shouldDeactivate = false;
-        if (recurring.endDate && nextExecution > recurring.endDate) {
-            shouldDeactivate = true;
-        }
+        const nextExecution = advanceDate(recurring.nextExecution, recurring.frequency);
+        const shouldDeactivate = !!(recurring.endDate && nextExecution > recurring.endDate);
 
-        await prisma.recurringTransaction.update({
-            where: { id },
-            data: {
-                lastExecuted: new Date(),
-                nextExecution,
-                isActive: shouldDeactivate ? false : true
+        // Crear transacción y actualizar recurrente atómicamente
+        const transaction = await prisma.$transaction(async (tx) => {
+            const created = await tx.transaction.create({
+                data: {
+                    userId: userId!,
+                    type: recurring.type,
+                    amount: recurring.amount,
+                    categoryId: recurring.categoryId,
+                    description: `${recurring.description} (Recurrente)`,
+                    date: new Date(),
+                    isRecurring: true,
+                    accountId: recurring.accountId || null,
+                    recurringPattern: JSON.stringify({
+                        recurringId: recurring.id,
+                        frequency: recurring.frequency
+                    })
+                }
+            });
+
+            // Update bank account balance if linked
+            if (recurring.accountId) {
+                const amountNum = Number(recurring.amount);
+                if (recurring.type === 'EXPENSE') {
+                    await tx.bankAccount.update({
+                        where: { id: recurring.accountId },
+                        data: { balance: { decrement: amountNum } }
+                    });
+                } else {
+                    await tx.bankAccount.update({
+                        where: { id: recurring.accountId },
+                        data: { balance: { increment: amountNum } }
+                    });
+                }
             }
+
+            await tx.recurringTransaction.update({
+                where: { id },
+                data: {
+                    lastExecuted: new Date(),
+                    nextExecution,
+                    isActive: !shouldDeactivate
+                }
+            });
+
+            return created;
         });
 
         res.json({
@@ -259,7 +299,7 @@ export const executeRecurringTransaction = async (req: AuthRequest, res: Respons
             }
         });
     } catch (error) {
-        console.error('Error executing recurring transaction:', error);
+        logger.fromError('recurring_execute_failed', error);
         res.status(500).json({ error: 'Error al ejecutar transacción' });
     }
 };
@@ -285,7 +325,7 @@ export const getPendingRecurringTransactions = async (req: AuthRequest, res: Res
             amount: Number(r.amount)
         })));
     } catch (error) {
-        console.error('Error fetching pending recurring transactions:', error);
+        logger.fromError('recurring_get_pending_failed', error);
         res.status(500).json({ error: 'Error al obtener transacciones pendientes' });
     }
 };
@@ -310,58 +350,69 @@ export const executeAllPendingRecurring = async (req: AuthRequest, res: Response
 
         for (const recurring of pending) {
             try {
-                // Crear la transacción
-                const transaction = await prisma.transaction.create({
-                    data: {
-                        userId: userId!,
-                        type: recurring.type,
-                        amount: recurring.amount,
-                        categoryId: recurring.categoryId,
-                        description: `${recurring.description} (Auto)`,
-                        date: new Date(),
-                        isRecurring: true,
-                        recurringPattern: JSON.stringify({
-                            recurringId: recurring.id,
-                            frequency: recurring.frequency
-                        })
-                    }
-                });
-
-                // Calcular próxima ejecución
-                let nextExecution = new Date(recurring.nextExecution);
-                switch (recurring.frequency) {
-                    case 'DAILY':
-                        nextExecution.setDate(nextExecution.getDate() + 1);
-                        break;
-                    case 'WEEKLY':
-                        nextExecution.setDate(nextExecution.getDate() + 7);
-                        break;
-                    case 'BIWEEKLY':
-                        nextExecution.setDate(nextExecution.getDate() + 14);
-                        break;
-                    case 'MONTHLY':
-                        nextExecution.setMonth(nextExecution.getMonth() + 1);
-                        break;
-                    case 'QUARTERLY':
-                        nextExecution.setMonth(nextExecution.getMonth() + 3);
-                        break;
-                    case 'YEARLY':
-                        nextExecution.setFullYear(nextExecution.getFullYear() + 1);
-                        break;
+                // Saltar si ya pasó endDate — marcar inactiva sin crear
+                if (recurring.endDate && recurring.nextExecution > recurring.endDate) {
+                    await prisma.recurringTransaction.update({
+                        where: { id: recurring.id },
+                        data: { isActive: false }
+                    });
+                    results.push({
+                        id: recurring.id,
+                        description: recurring.description,
+                        status: 'skipped',
+                        error: 'Fecha de fin alcanzada'
+                    });
+                    continue;
                 }
 
-                let shouldDeactivate = false;
-                if (recurring.endDate && nextExecution > recurring.endDate) {
-                    shouldDeactivate = true;
-                }
+                const nextExecution = advanceDate(recurring.nextExecution, recurring.frequency);
+                const shouldDeactivate = !!(recurring.endDate && nextExecution > recurring.endDate);
 
-                await prisma.recurringTransaction.update({
-                    where: { id: recurring.id },
-                    data: {
-                        lastExecuted: new Date(),
-                        nextExecution,
-                        isActive: shouldDeactivate ? false : true
+                // Crear transacción y actualizar recurrente atómicamente
+                const transaction = await prisma.$transaction(async (tx) => {
+                    const created = await tx.transaction.create({
+                        data: {
+                            userId: userId!,
+                            type: recurring.type,
+                            amount: recurring.amount,
+                            categoryId: recurring.categoryId,
+                            description: `${recurring.description} (Auto)`,
+                            date: new Date(),
+                            isRecurring: true,
+                            accountId: recurring.accountId || null,
+                            recurringPattern: JSON.stringify({
+                                recurringId: recurring.id,
+                                frequency: recurring.frequency
+                            })
+                        }
+                    });
+
+                    // Update bank account balance if linked
+                    if (recurring.accountId) {
+                        const amountNum = Number(recurring.amount);
+                        if (recurring.type === 'EXPENSE') {
+                            await tx.bankAccount.update({
+                                where: { id: recurring.accountId },
+                                data: { balance: { decrement: amountNum } }
+                            });
+                        } else {
+                            await tx.bankAccount.update({
+                                where: { id: recurring.accountId },
+                                data: { balance: { increment: amountNum } }
+                            });
+                        }
                     }
+
+                    await tx.recurringTransaction.update({
+                        where: { id: recurring.id },
+                        data: {
+                            lastExecuted: new Date(),
+                            nextExecution,
+                            isActive: !shouldDeactivate
+                        }
+                    });
+
+                    return created;
                 });
 
                 results.push({
@@ -386,7 +437,7 @@ export const executeAllPendingRecurring = async (req: AuthRequest, res: Response
             results
         });
     } catch (error) {
-        console.error('Error executing all pending recurring:', error);
+        logger.fromError('recurring_execute_all_failed', error);
         res.status(500).json({ error: 'Error al ejecutar transacciones' });
     }
 };

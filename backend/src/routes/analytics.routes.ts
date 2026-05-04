@@ -6,7 +6,8 @@ import {
     getTopCategories,
     getDashboardStats,
     getFinancialReport,
-    getForecast
+    getForecast,
+    getAdvancedAnalytics
 } from '../controllers/analytics.controller';
 
 const router = Router();
@@ -17,5 +18,6 @@ router.get('/top-categories', authenticate, getTopCategories);
 router.get('/dashboard', authenticate, getDashboardStats);
 router.get('/report', authenticate, getFinancialReport);
 router.get('/forecast', authenticate, getForecast);
+router.get('/advanced', authenticate, getAdvancedAnalytics);
 
 export default router;

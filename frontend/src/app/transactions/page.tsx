@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -11,15 +11,44 @@ import * as XLSX from 'xlsx';
 import ExportMenu from '@/components/ExportMenu';
 import CurrencyInput from '@/components/CurrencyInput';
 import { useToast } from '@/components/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 export default function TransactionsPage() {
     const { isAuthenticated, loading: authLoading } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const { showToast } = useToast();
-    const [filter, setFilter] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
-    const [accountFilter, setAccountFilter] = useState<string>('');
+
+    // Estado inicializado desde la URL — permite refrescar/compartir links con filtros aplicados
+    const [filter, setFilter] = useState<'all' | 'INCOME' | 'EXPENSE'>(
+        (searchParams.get('type') as any) || 'all'
+    );
+    const [accountFilter, setAccountFilter] = useState<string>(searchParams.get('accountId') || '');
+    const [categoryFilter, setCategoryFilter] = useState<string>(searchParams.get('categoryId') || '');
+    const [searchFilter, setSearchFilter] = useState(searchParams.get('search') || '');
+    const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
+    const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
+    const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1', 10));
+    const PAGE_SIZE = 20;
     const [editingTransaction, setEditingTransaction] = useState<any>(null);
+    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+    const [confirmMessage, setConfirmMessage] = useState('');
+
+    // Sincroniza filtros con URL (replace para no llenar el back stack)
+    const syncUrl = useCallback(() => {
+        const params = new URLSearchParams();
+        if (filter !== 'all') params.set('type', filter);
+        if (accountFilter) params.set('accountId', accountFilter);
+        if (categoryFilter) params.set('categoryId', categoryFilter);
+        if (searchFilter) params.set('search', searchFilter);
+        if (startDate) params.set('startDate', startDate);
+        if (endDate) params.set('endDate', endDate);
+        if (currentPage > 1) params.set('page', String(currentPage));
+        const qs = params.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, [filter, accountFilter, categoryFilter, searchFilter, startDate, endDate, currentPage, pathname, router]);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
@@ -27,13 +56,26 @@ export default function TransactionsPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data, isLoading } = useQuery({
-        queryKey: ['transactions', filter, accountFilter],
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filter, accountFilter, categoryFilter, searchFilter, startDate, endDate]);
+
+    useEffect(() => {
+        syncUrl();
+    }, [syncUrl]);
+
+    const { data, isLoading, isError, error, refetch } = useQuery({
+        queryKey: ['transactions', filter, accountFilter, categoryFilter, searchFilter, startDate, endDate, currentPage],
         queryFn: () =>
             api.getTransactions({
                 ...(filter !== 'all' && { type: filter }),
                 ...(accountFilter && { accountId: accountFilter }),
-                limit: 50,
+                ...(categoryFilter && { categoryId: categoryFilter }),
+                ...(searchFilter && { search: searchFilter }),
+                ...(startDate && { startDate }),
+                ...(endDate && { endDate }),
+                page: currentPage,
+                limit: PAGE_SIZE,
             }),
         enabled: isAuthenticated,
     });
@@ -51,12 +93,24 @@ export default function TransactionsPage() {
         enabled: isAuthenticated && !!editingTransaction,
     });
 
+    const { data: allCategories } = useQuery({
+        queryKey: ['categories-all'],
+        queryFn: () => api.getCategories(),
+        enabled: isAuthenticated,
+    });
+
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.deleteTransaction(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
             showToast('Transaccion eliminada', 'success');
         },
         onError: (error: any) => {
@@ -70,6 +124,12 @@ export default function TransactionsPage() {
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['balance'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards'] });
+            queryClient.invalidateQueries({ queryKey: ['credit-cards-summary'] });
             setEditingTransaction(null);
             showToast('Transaccion actualizada', 'success');
         },
@@ -87,6 +147,7 @@ export default function TransactionsPage() {
     }
 
     const transactions = data?.data || [];
+    const pagination = data?.pagination;
 
     const exportToExcel = () => {
         if (transactions.length === 0) {
@@ -174,8 +235,8 @@ export default function TransactionsPage() {
             {/* Main Content */}
             <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-6">
-                    {/* Filters - Mobile Responsive */}
-                    <div className="flex flex-wrap gap-2 sm:gap-4 mb-4 sm:mb-6">
+                    {/* Type Filters */}
+                    <div className="flex flex-wrap gap-2 sm:gap-4 mb-4">
                         <button
                             onClick={() => setFilter('all')}
                             className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base ${filter === 'all'
@@ -203,13 +264,38 @@ export default function TransactionsPage() {
                         >
                             💸 Gastos
                         </button>
+                    </div>
+
+                    {/* Advanced Filters */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                        <input
+                            type="text"
+                            value={searchFilter}
+                            onChange={(e) => setSearchFilter(e.target.value)}
+                            placeholder="🔍 Buscar por descripcion..."
+                            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {allCategories && allCategories.length > 0 && (
+                            <select
+                                value={categoryFilter}
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm outline-none cursor-pointer"
+                            >
+                                <option value="">Todas las categorias</option>
+                                {allCategories.map((cat: any) => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.icon} {cat.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                         {accounts && accounts.length > 0 && (
                             <select
                                 value={accountFilter}
                                 onChange={(e) => setAccountFilter(e.target.value)}
-                                className="px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-none outline-none cursor-pointer"
+                                className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm outline-none cursor-pointer"
                             >
-                                <option value="">🏦 Todas las cuentas</option>
+                                <option value="">Todas las cuentas</option>
                                 {accounts.filter((a: any) => a.isActive).map((account: any) => (
                                     <option key={account.id} value={account.id}>
                                         🏦 {account.name}
@@ -217,12 +303,61 @@ export default function TransactionsPage() {
                                 ))}
                             </select>
                         )}
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm outline-none"
+                            placeholder="Desde"
+                        />
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm outline-none"
+                            placeholder="Hasta"
+                        />
                     </div>
+                    {(searchFilter || categoryFilter || accountFilter || startDate || endDate) && (
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {pagination ? `${pagination.total} resultado${pagination.total !== 1 ? 's' : ''}` : ''}
+                            </span>
+                            <button
+                                onClick={() => {
+                                    setSearchFilter('');
+                                    setCategoryFilter('');
+                                    setAccountFilter('');
+                                    setStartDate('');
+                                    setEndDate('');
+                                }}
+                                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            >
+                                Limpiar filtros
+                            </button>
+                        </div>
+                    )}
 
                     {/* Transactions List */}
                     {isLoading ? (
                         <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" role="status" aria-label="Cargando transacciones"></div>
+                        </div>
+                    ) : isError ? (
+                        <div className="text-center py-12">
+                            <div className="inline-flex flex-col items-center gap-3 p-6 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800 max-w-md mx-auto">
+                                <span className="text-3xl">⚠️</span>
+                                <h3 className="text-lg font-semibold text-red-900 dark:text-red-100">Error al cargar</h3>
+                                <p className="text-sm text-red-700 dark:text-red-300">
+                                    {(error as any)?.message || 'No se pudieron cargar las transacciones'}
+                                </p>
+                                <button
+                                    onClick={() => refetch()}
+                                    className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
+                                >
+                                    Reintentar
+                                </button>
+                            </div>
                         </div>
                     ) : transactions.length > 0 ? (
                         <div className="space-y-2">
@@ -232,9 +367,8 @@ export default function TransactionsPage() {
                                     transaction={transaction}
                                     onEdit={() => handleEdit(transaction)}
                                     onDelete={(id) => {
-                                        if (confirm('¿Estás seguro de eliminar esta transacción?')) {
-                                            deleteMutation.mutate(id);
-                                        }
+                                        setConfirmMessage('¿Estás seguro de eliminar esta transacción?');
+                                        setConfirmAction(() => () => deleteMutation.mutate(id));
                                     }}
                                 />
                             ))}
@@ -247,6 +381,34 @@ export default function TransactionsPage() {
                                     ? 'Comienza agregando tu primera transacción'
                                     : `No hay ${filter === 'INCOME' ? 'ingresos' : 'gastos'} registrados`}
                             </p>
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {pagination && pagination.totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Mostrando {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total}
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 rounded-lg text-sm font-medium transition bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+                                >
+                                    ← Anterior
+                                </button>
+                                <span className="px-3 py-1 text-sm text-gray-700 dark:text-gray-300">
+                                    {pagination.page} / {pagination.totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(pagination.totalPages, p + 1))}
+                                    disabled={currentPage >= pagination.totalPages}
+                                    className="px-3 py-1 rounded-lg text-sm font-medium transition bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+                                >
+                                    Siguiente →
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -381,6 +543,15 @@ export default function TransactionsPage() {
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                isOpen={!!confirmAction}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={() => confirmAction?.()}
+                message={confirmMessage}
+                confirmLabel="Eliminar"
+                variant="danger"
+            />
         </div>
     );
 }

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 interface AuthRequest extends Request {
     user?: {
@@ -33,7 +34,7 @@ export const getDebts = async (req: AuthRequest, res: Response) => {
 
         res.json(debtsWithPending);
     } catch (error) {
-        console.error('Get debts error:', error);
+        logger.fromError('debt_get_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -62,7 +63,7 @@ export const createDebt = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(debt);
     } catch (error) {
-        console.error('Create debt error:', error);
+        logger.fromError('debt_create_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -94,7 +95,7 @@ export const updateDebt = async (req: AuthRequest, res: Response) => {
 
         res.json(updated);
     } catch (error) {
-        console.error('Update debt error:', error);
+        logger.fromError('debt_update_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -204,7 +205,7 @@ export const payDebt = async (req: AuthRequest, res: Response) => {
             message: newPaidAmount === totalAmount ? '¡Deuda pagada completamente!' : '💰 Pago registrado exitosamente'
         });
     } catch (error) {
-        console.error('Pay debt error:', error);
+        logger.fromError('debt_pay_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -229,7 +230,7 @@ export const deleteDebt = async (req: AuthRequest, res: Response) => {
 
         res.json({ message: 'Debt deleted successfully' });
     } catch (error) {
-        console.error('Delete debt error:', error);
+        logger.fromError('debt_delete_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

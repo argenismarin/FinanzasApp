@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import ExportMenu from '@/components/ExportMenu';
 import CurrencyInput from '@/components/CurrencyInput';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +14,9 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary';
+import { debtSchema, type DebtFormData } from '@/lib/schemas';
 
 export default function DebtsPage() {
     const router = useRouter();
@@ -22,11 +27,16 @@ export default function DebtsPage() {
     const [editingDebt, setEditingDebt] = useState<any>(null);
     const [expandedPaymentHistory, setExpandedPaymentHistory] = useState<string | null>(null);
     const [paymentModal, setPaymentModal] = useState<{ debt: any; amount: string; description: string; accountId: string } | null>(null);
-    const [newDebt, setNewDebt] = useState({
-        creditor: '',
-        totalAmount: '',
-        description: '',
-        date: ''
+    const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+    const [confirmMessage, setConfirmMessage] = useState('');
+
+    const createForm = useForm<DebtFormData>({
+        resolver: zodResolver(debtSchema),
+        defaultValues: { creditor: '', totalAmount: 0, description: '', dueDate: '' }
+    });
+    const editForm = useForm<DebtFormData>({
+        resolver: zodResolver(debtSchema),
+        defaultValues: { creditor: '', totalAmount: 0, description: '', dueDate: '' }
     });
 
     useEffect(() => {
@@ -35,7 +45,7 @@ export default function DebtsPage() {
         }
     }, [authLoading, isAuthenticated, router]);
 
-    const { data: debtsData, isLoading, refetch } = useQuery({
+    const debtsQuery = useQuery({
         queryKey: ['debts'],
         queryFn: () => api.getDebts(),
         enabled: isAuthenticated,
@@ -47,37 +57,78 @@ export default function DebtsPage() {
         enabled: isAuthenticated,
     });
 
+    const invalidateDebtQueries = () => {
+        queryClient.invalidateQueries({ queryKey: ['debts'] });
+        queryClient.invalidateQueries({ queryKey: ['balance'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    };
+
     const createMutation = useMutation({
         mutationFn: (data: any) => api.createDebt(data),
         onSuccess: () => {
-            refetch();
+            invalidateDebtQueries();
             setShowAddForm(false);
-            setNewDebt({ creditor: '', totalAmount: '', description: '', date: '' });
+            createForm.reset({ creditor: '', totalAmount: 0, description: '', dueDate: '' });
             showToast('Deuda registrada exitosamente', 'success');
         },
-        onError: () => {
-            showToast('Error al registrar la deuda', 'error');
+        onError: (err: any) => {
+            showToast(err?.message || 'Error al registrar la deuda', 'error');
         },
     });
 
     const updateMutation = useMutation({
         mutationFn: ({ id, data }: { id: string; data: any }) => api.updateDebt(id, data),
         onSuccess: () => {
-            refetch();
+            invalidateDebtQueries();
             setEditingDebt(null);
             showToast('Deuda actualizada correctamente', 'success');
         },
-        onError: () => {
-            showToast('Error al actualizar la deuda', 'error');
+        onError: (err: any) => {
+            showToast(err?.message || 'Error al actualizar la deuda', 'error');
         },
     });
+
+    const handleCreate = createForm.handleSubmit((data) => {
+        createMutation.mutate({
+            creditor: data.creditor,
+            totalAmount: data.totalAmount,
+            description: data.description || null,
+            dueDate: data.dueDate || null
+        });
+    });
+
+    const handleEdit = editForm.handleSubmit((data) => {
+        if (!editingDebt) return;
+        updateMutation.mutate({
+            id: editingDebt.id,
+            data: {
+                creditor: data.creditor,
+                totalAmount: data.totalAmount,
+                description: data.description || null,
+                dueDate: data.dueDate || null
+            }
+        });
+    });
+
+    const openEditModal = (debt: any) => {
+        editForm.reset({
+            creditor: debt.creditor,
+            totalAmount: Number(debt.totalAmount),
+            description: debt.description || '',
+            dueDate: debt.dueDate ? new Date(debt.dueDate).toISOString().split('T')[0] : ''
+        });
+        setEditingDebt({ id: debt.id });
+    };
 
     const payMutation = useMutation({
         mutationFn: ({ id, amount, description, accountId }: { id: string; amount: number; description?: string; accountId?: string }) =>
             api.payDebt(id, { amount, description, accountId }),
         onSuccess: (data) => {
-            refetch();
+            invalidateDebtQueries();
             queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['transaction-stats'] });
             setPaymentModal(null);
             showToast(data.message || 'Pago registrado exitosamente', 'success');
         },
@@ -89,7 +140,7 @@ export default function DebtsPage() {
     const deleteMutation = useMutation({
         mutationFn: (id: string) => api.deleteDebt(id),
         onSuccess: () => {
-            refetch();
+            invalidateDebtQueries();
             showToast('Deuda eliminada correctamente', 'success');
         },
         onError: () => {
@@ -124,7 +175,7 @@ export default function DebtsPage() {
         }).format(amount);
     };
 
-    const debts = Array.isArray(debtsData) ? debtsData : [];
+    const debts: any[] = Array.isArray(debtsQuery.data) ? debtsQuery.data : [];
 
     // Group by creditor and separate debts from abonos
     const groupedDebts = debts.reduce((acc: any, debt: any) => {
@@ -156,8 +207,8 @@ export default function DebtsPage() {
     const creditorGroups = Object.values(groupedDebts);
 
     // Separate stats for debts and abonos
-    const actualDebts = debts.filter(d => d.pendingAmount > 0);
-    const actualAbonos = debts.filter(d => d.pendingAmount < 0);
+    const actualDebts = debts.filter((d: any) => d.pendingAmount > 0);
+    const actualAbonos = debts.filter((d: any) => d.pendingAmount < 0);
 
     // Count unique creditors for debts and abonos
     const debtCreditors = creditorGroups.filter((g: any) => g.netPending > 0);
@@ -173,7 +224,7 @@ export default function DebtsPage() {
         return sum + debt.pendingAmount;
     }, 0));
 
-    if (authLoading || isLoading) {
+    if (authLoading || debtsQuery.isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
@@ -229,26 +280,32 @@ export default function DebtsPage() {
             {showAddForm && (
                 <Card padding="md" className="mb-4 sm:mb-6">
                     <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Nueva Deuda</h3>
-                    <div className="space-y-4">
-                        <input
-                            type="text"
-                            placeholder="Acreedor (persona o institucion)"
-                            value={newDebt.creditor}
-                            onChange={(e) => setNewDebt({ ...newDebt, creditor: e.target.value })}
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
-                        />
+                    <form onSubmit={handleCreate} className="space-y-4">
+                        <div>
+                            <input
+                                type="text"
+                                placeholder="Acreedor (persona o institución)"
+                                {...createForm.register('creditor')}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            />
+                            {createForm.formState.errors.creditor && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.creditor.message}</p>
+                            )}
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Monto Total</label>
                             <CurrencyInput
-                                value={newDebt.totalAmount}
-                                onChange={(value) => setNewDebt({ ...newDebt, totalAmount: value })}
+                                value={createForm.watch('totalAmount') ?? ''}
+                                onChange={(value) => createForm.setValue('totalAmount', parseFloat(value) || 0, { shouldValidate: true })}
                                 placeholder="Ingrese el monto"
                             />
+                            {createForm.formState.errors.totalAmount && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createForm.formState.errors.totalAmount.message}</p>
+                            )}
                         </div>
                         <textarea
-                            placeholder="Descripcion (opcional)"
-                            value={newDebt.description}
-                            onChange={(e) => setNewDebt({ ...newDebt, description: e.target.value })}
+                            placeholder="Descripción (opcional)"
+                            {...createForm.register('description')}
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             rows={2}
                         />
@@ -256,30 +313,20 @@ export default function DebtsPage() {
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha de la Deuda</label>
                             <input
                                 type="date"
-                                value={newDebt.date || ''}
-                                onChange={(e) => setNewDebt({ ...newDebt, date: e.target.value })}
+                                {...createForm.register('dueDate')}
                                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
                             />
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Fecha en que se origino la deuda (opcional)</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Fecha de vencimiento (opcional)</p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-2">
-                            <Button
-                                onClick={() => createMutation.mutate(newDebt)}
-                                disabled={!newDebt.creditor || !newDebt.totalAmount || createMutation.isPending}
-                                variant="danger"
-                                fullWidth
-                            >
+                            <Button type="submit" disabled={createMutation.isPending} variant="danger" fullWidth>
                                 {createMutation.isPending ? 'Guardando...' : 'Guardar'}
                             </Button>
-                            <Button
-                                onClick={() => setShowAddForm(false)}
-                                variant="secondary"
-                                fullWidth
-                            >
+                            <Button type="button" onClick={() => setShowAddForm(false)} variant="secondary" fullWidth>
                                 Cancelar
                             </Button>
                         </div>
-                    </div>
+                    </form>
                 </Card>
             )}
 
@@ -287,52 +334,44 @@ export default function DebtsPage() {
             {editingDebt && (
                 <Card padding="md" className="mb-4 sm:mb-6">
                     <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">✏️ Editar Deuda</h3>
-                    <div className="space-y-4">
-                        <input
-                            type="text"
-                            placeholder="Acreedor"
-                            value={editingDebt.creditor}
-                            onChange={(e) => setEditingDebt({ ...editingDebt, creditor: e.target.value })}
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
-                        />
+                    <form onSubmit={handleEdit} className="space-y-4">
+                        <div>
+                            <input
+                                type="text"
+                                placeholder="Acreedor"
+                                {...editForm.register('creditor')}
+                                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[48px]"
+                            />
+                            {editForm.formState.errors.creditor && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.creditor.message}</p>
+                            )}
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Monto Total</label>
                             <CurrencyInput
-                                value={editingDebt.totalAmount}
-                                onChange={(value) => setEditingDebt({ ...editingDebt, totalAmount: value })}
+                                value={editForm.watch('totalAmount') ?? ''}
+                                onChange={(value) => editForm.setValue('totalAmount', parseFloat(value) || 0, { shouldValidate: true })}
                                 placeholder="Ingrese el monto"
                             />
+                            {editForm.formState.errors.totalAmount && (
+                                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{editForm.formState.errors.totalAmount.message}</p>
+                            )}
                         </div>
                         <textarea
-                            placeholder="Descripcion"
-                            value={editingDebt.description || ''}
-                            onChange={(e) => setEditingDebt({ ...editingDebt, description: e.target.value })}
+                            placeholder="Descripción"
+                            {...editForm.register('description')}
                             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             rows={2}
                         />
                         <div className="flex flex-col sm:flex-row gap-2">
-                            <Button
-                                onClick={() => updateMutation.mutate({
-                                    id: editingDebt.id,
-                                    data: {
-                                        creditor: editingDebt.creditor,
-                                        totalAmount: parseFloat(editingDebt.totalAmount),
-                                        description: editingDebt.description
-                                    }
-                                })}
-                                fullWidth
-                            >
-                                Actualizar
+                            <Button type="submit" disabled={updateMutation.isPending} fullWidth>
+                                {updateMutation.isPending ? 'Actualizando...' : 'Actualizar'}
                             </Button>
-                            <Button
-                                onClick={() => setEditingDebt(null)}
-                                variant="secondary"
-                                fullWidth
-                            >
+                            <Button type="button" onClick={() => setEditingDebt(null)} variant="secondary" fullWidth>
                                 Cancelar
                             </Button>
                         </div>
-                    </div>
+                    </form>
                 </Card>
             )}
 
@@ -377,10 +416,7 @@ export default function DebtsPage() {
                                                 </div>
                                                 <div className="flex gap-1">
                                                     <button
-                                                        onClick={() => setEditingDebt({
-                                                            ...debt,
-                                                            totalAmount: debt.totalAmount.toString()
-                                                        })}
+                                                        onClick={() => openEditModal(debt)}
                                                         className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                         aria-label={`Editar deuda con ${debt.creditor}`}
                                                     >
@@ -388,9 +424,8 @@ export default function DebtsPage() {
                                                     </button>
                                                     <button
                                                         onClick={() => {
-                                                            if (confirm('¿Eliminar esta deuda?')) {
-                                                                deleteMutation.mutate(debt.id);
-                                                            }
+                                                            setConfirmMessage('¿Eliminar esta deuda?');
+                                                            setConfirmAction(() => () => deleteMutation.mutate(debt.id));
                                                         }}
                                                         className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                                         aria-label={`Eliminar deuda con ${debt.creditor}`}
@@ -536,10 +571,7 @@ export default function DebtsPage() {
                                     </div>
                                     <div className="flex gap-1">
                                         <button
-                                            onClick={() => setEditingDebt({
-                                                ...abono,
-                                                totalAmount: abono.totalAmount.toString()
-                                            })}
+                                            onClick={() => openEditModal(abono)}
                                             className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                             aria-label={`Editar abono de ${abono.creditor}`}
                                         >
@@ -547,9 +579,8 @@ export default function DebtsPage() {
                                         </button>
                                         <button
                                             onClick={() => {
-                                                if (confirm('¿Eliminar este abono?')) {
-                                                    deleteMutation.mutate(abono.id);
-                                                }
+                                                setConfirmMessage('¿Eliminar este abono?');
+                                                setConfirmAction(() => () => deleteMutation.mutate(abono.id));
                                             }}
                                             className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded min-w-[44px] min-h-[44px] flex items-center justify-center"
                                             aria-label={`Eliminar abono de ${abono.creditor}`}
@@ -716,6 +747,15 @@ export default function DebtsPage() {
                     </>
                 )}
             </Modal>
+
+            <ConfirmModal
+                isOpen={!!confirmAction}
+                onClose={() => setConfirmAction(null)}
+                onConfirm={() => confirmAction?.()}
+                message={confirmMessage}
+                confirmLabel="Eliminar"
+                variant="danger"
+            />
         </div>
     );
 }

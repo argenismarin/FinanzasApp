@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // Get all budgets for user
 export const getBudgets = async (req: AuthRequest, res: Response) => {
@@ -27,7 +28,7 @@ export const getBudgets = async (req: AuthRequest, res: Response) => {
 
         res.json(budgets);
     } catch (error) {
-        console.error('Get budgets error:', error);
+        logger.fromError('budget_get_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -51,46 +52,63 @@ export const getBudgetProgress = async (req: AuthRequest, res: Response) => {
             return res.json([]);
         }
 
-        // Get the date range for all budgets
-        const minStartDate = budgets.reduce((min, b) =>
-            b.startDate < min ? b.startDate : min, budgets[0].startDate);
-        const maxEndDate = budgets.reduce((max, b) => {
-            const end = b.endDate || new Date();
-            return end > max ? end : max;
-        }, budgets[0].endDate || new Date());
+        // Calculate current period date range for each budget
+        const now = new Date();
+        const getperiodRange = (budget: any): { start: Date; end: Date } => {
+            const period = budget.period || 'MONTHLY';
+            const budgetStart = new Date(budget.startDate);
 
-        // Get all category IDs and user IDs from budgets
-        const categoryIds = [...new Set(budgets.map(b => b.categoryId))];
-        const userIds = userRole === 'ADMIN'
-            ? [...new Set(budgets.map(b => b.userId))]
-            : [userId];
-
-        // Single query to get all spending grouped by userId and categoryId
-        const spentByCategory = await prisma.transaction.groupBy({
-            by: ['userId', 'categoryId'],
-            where: {
-                userId: { in: userIds },
-                categoryId: { in: categoryIds },
-                type: 'EXPENSE',
-                date: {
-                    gte: minStartDate,
-                    lte: maxEndDate
+            switch (period) {
+                case 'WEEKLY': {
+                    const daysSinceStart = Math.floor((now.getTime() - budgetStart.getTime()) / (1000 * 60 * 60 * 24));
+                    const currentWeekOffset = Math.floor(daysSinceStart / 7) * 7;
+                    const start = new Date(budgetStart);
+                    start.setDate(start.getDate() + currentWeekOffset);
+                    const end = new Date(start);
+                    end.setDate(end.getDate() + 6);
+                    end.setHours(23, 59, 59, 999);
+                    return { start, end };
                 }
-            },
-            _sum: { amount: true }
-        });
+                case 'MONTHLY': {
+                    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+                    return { start, end };
+                }
+                case 'QUARTERLY': {
+                    const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+                    const start = new Date(now.getFullYear(), quarterMonth, 1);
+                    const end = new Date(now.getFullYear(), quarterMonth + 3, 0, 23, 59, 59, 999);
+                    return { start, end };
+                }
+                case 'YEARLY': {
+                    const start = new Date(now.getFullYear(), 0, 1);
+                    const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+                    return { start, end };
+                }
+                default: {
+                    // Fallback: use budget startDate to endDate or current month
+                    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+                    return { start, end };
+                }
+            }
+        };
 
-        // Create a lookup map for quick access
-        const spentMap = new Map<string, number>();
-        spentByCategory.forEach(item => {
-            const key = `${item.userId}-${item.categoryId}`;
-            spentMap.set(key, Number(item._sum.amount) || 0);
-        });
+        // Query spent amount per budget individually using correct period ranges
+        const budgetsWithProgress = await Promise.all(budgets.map(async (budget) => {
+            const { start, end } = getperiodRange(budget);
 
-        // Build the result with progress calculated
-        const budgetsWithProgress = budgets.map(budget => {
-            const key = `${budget.userId}-${budget.categoryId}`;
-            const spentAmount = spentMap.get(key) || 0;
+            const spent = await prisma.transaction.aggregate({
+                where: {
+                    userId: budget.userId,
+                    categoryId: budget.categoryId,
+                    type: 'EXPENSE',
+                    date: { gte: start, lte: end }
+                },
+                _sum: { amount: true }
+            });
+
+            const spentAmount = Number(spent._sum.amount) || 0;
             const budgetAmount = Number(budget.amount);
             const percentage = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
 
@@ -98,13 +116,15 @@ export const getBudgetProgress = async (req: AuthRequest, res: Response) => {
                 ...budget,
                 spent: spentAmount,
                 remaining: budgetAmount - spentAmount,
-                percentage: Math.round(percentage * 100) / 100
+                percentage: Math.round(percentage * 100) / 100,
+                periodStart: start,
+                periodEnd: end
             };
-        });
+        }));
 
         res.json(budgetsWithProgress);
     } catch (error) {
-        console.error('Get budget progress error:', error);
+        logger.fromError('budget_progress_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -135,7 +155,7 @@ export const createBudget = async (req: AuthRequest, res: Response) => {
 
         res.status(201).json(budget);
     } catch (error) {
-        console.error('Create budget error:', error);
+        logger.fromError('budget_create_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -177,7 +197,7 @@ export const updateBudget = async (req: AuthRequest, res: Response) => {
 
         res.json(budget);
     } catch (error) {
-        console.error('Update budget error:', error);
+        logger.fromError('budget_update_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -207,7 +227,7 @@ export const deleteBudget = async (req: AuthRequest, res: Response) => {
 
         res.status(204).send();
     } catch (error) {
-        console.error('Delete budget error:', error);
+        logger.fromError('budget_delete_failed', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
